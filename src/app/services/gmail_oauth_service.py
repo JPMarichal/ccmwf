@@ -23,6 +23,7 @@ from app.config import Settings
 from app.models import EmailMessage, EmailAttachment, ProcessingResult
 from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
+from app.services.drive_service import DriveService
 
 
 class GmailOAuthService:
@@ -35,12 +36,13 @@ class GmailOAuthService:
         'https://www.googleapis.com/auth/gmail.labels'
     ]
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
         self.settings = settings
         self.logger = structlog.get_logger()
         self.credentials = None
         self.gmail_service = None
         self._authenticated = False
+        self.drive_service = drive_service
 
     async def authenticate(self) -> bool:
         """Autenticar con Gmail usando OAuth 2.0"""
@@ -315,6 +317,40 @@ class GmailOAuthService:
             table_headers_count = len(parsed_table["headers"]) if parsed_table else 0
             table_rows_count = len(parsed_table["rows"]) if parsed_table else 0
 
+            drive_folder_id: Optional[str] = None
+            drive_uploaded_files: List[Dict[str, str]] = []
+            drive_upload_errors: List[Dict[str, str]] = []
+
+            if self.drive_service and attachments:
+                if not fecha_generacion:
+                    drive_upload_errors.append({
+                        "stage": "preflight",
+                        "error": "missing_fecha_generacion",
+                    })
+                else:
+                    distrito = DriveService.guess_primary_district(parsed_table)
+                    try:
+                        folder_id, uploaded, errors = self.drive_service.upload_attachments(
+                            fecha_generacion,
+                            attachments,
+                            distrito,
+                        )
+                        drive_folder_id = folder_id
+                        if uploaded:
+                            drive_uploaded_files = uploaded
+                        if errors:
+                            drive_upload_errors.extend(errors)
+                    except Exception as exc:  # noqa: BLE001
+                        self.logger.error(
+                            "Error subiendo attachments a Drive",
+                            message_id=msg_id,
+                            error=str(exc),
+                        )
+                        drive_upload_errors.append({
+                            "stage": "upload_attachments",
+                            "error": str(exc),
+                        })
+
             result = {
                 'success': success,
                 'message_id': msg_id,
@@ -326,7 +362,10 @@ class GmailOAuthService:
                 'validation_errors': validation_errors,
                 'parsed_table': parsed_table,
                 'table_errors': table_errors,
-                'body_preview': body[:200] + "..." if len(body) > 200 else body
+                'body_preview': body[:200] + "..." if len(body) > 200 else body,
+                'drive_folder_id': drive_folder_id,
+                'drive_uploaded_files': drive_uploaded_files,
+                'drive_upload_errors': drive_upload_errors,
             }
 
             if success:
@@ -336,6 +375,11 @@ class GmailOAuthService:
                                attachments=len(attachments),
                                table_headers=table_headers_count,
                                table_rows=table_rows_count)
+                if drive_uploaded_files:
+                    self.logger.info("📤 Archivos subidos a Drive",
+                                     message_id=msg_id,
+                                     files=len(drive_uploaded_files),
+                                     drive_folder_id=drive_folder_id)
             else:
                 self.logger.warning("⚠️ Validación de estructura fallida",
                                     message_id=msg_id,
@@ -353,6 +397,11 @@ class GmailOAuthService:
                                  headers=table_headers_count,
                                  rows=table_rows_count)
 
+            if drive_upload_errors:
+                self.logger.warning("⚠️ Errores al subir archivos a Drive",
+                                    message_id=msg_id,
+                                    errors=drive_upload_errors)
+
             return result
 
         except Exception as e:
@@ -361,7 +410,12 @@ class GmailOAuthService:
             return {
                 'success': False,
                 'error': str(e),
-                'message_id': msg_id
+                'message_id': msg_id,
+                'parsed_table': None,
+                'table_errors': ['processing_exception'],
+                'drive_folder_id': None,
+                'drive_uploaded_files': [],
+                'drive_upload_errors': [{'stage': 'processing_exception', 'error': str(e)}],
             }
 
     def _get_header_value(self, headers: List[Dict], name: str) -> str:
