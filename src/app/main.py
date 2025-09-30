@@ -10,23 +10,26 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.services.email_service import EmailService
+from app.services.drive_service import DriveService
 
 # Configurar logger
 logger = structlog.get_logger()
 
 # Estado global de la aplicación
 email_service = None
+drive_service = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Configuración del ciclo de vida de la aplicación"""
-    global email_service
+    global email_service, drive_service
 
     # Startup
     logger.info("🚀 Iniciando Email Service...")
 
     settings = get_settings()
-    email_service = EmailService(settings)
+    drive_service = DriveService(settings)
+    email_service = EmailService(settings, drive_service=drive_service)
 
     # Test de conexión durante startup
     try:
@@ -42,6 +45,8 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Cerrando Email Service...")
     if email_service:
         await email_service.close()
+    if drive_service:
+        drive_service.close()
 
 # Crear aplicación FastAPI
 app = FastAPI(
