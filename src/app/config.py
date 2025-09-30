@@ -4,8 +4,8 @@ Configuración de la aplicación Email Service
 
 import os
 from pathlib import Path
-from typing import Optional
-from pydantic import field_validator
+from typing import Optional, List
+from pydantic import field_validator, Field
 from pydantic_settings import BaseSettings
 import structlog
 
@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Search Configuration
     email_subject_pattern: str = "Misioneros que llegan"
     processed_label: str = "misioneros-procesados"
+    email_table_required_columns: List[str] = Field(default_factory=lambda: ["Distrito", "Zona"])
 
     # Application Configuration
     app_env: str = "development"
