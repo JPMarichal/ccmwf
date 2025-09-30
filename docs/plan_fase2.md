@@ -24,26 +24,27 @@ Procesar el contenido del correo recibido desde Gmail, validando su estructura y
 
 ## Plan Semanal
 
-### Semana 5 – Análisis y Diseño
+### Semana 5 – Análisis y Diseño ✅
 - **Día 1-2**
-  - **Revisión de contenido HTML** de correos reales (ejemplos de la hermana Natalia) para identificar estructura de la tabla.
-  - **Definir esquema de datos** esperado (columnas, nombres, formatos).
+  - **Revisión de contenido HTML** de correos reales (ejemplos de la hermana Natalia) para identificar estructura de la tabla. *(Completado – ver `app/services/email_html_parser.py`)*
+  - **Definir esquema de datos** esperado (columnas, nombres, formatos). *(Columnas iniciales configuradas vía `email_table_required_columns` en `app/config.py`)*
 - **Día 3-4**
-  - **Diseñar parser** (utilidades en `EmailService` o módulo dedicado) para convertir HTML a objetos Python (lista de dicts).
-  - **Plan de validación**: reglas de negocio (campos obligatorios, tipos, normalización de texto).
+  - **Diseñar parser** (utilidades en `EmailService` o módulo dedicado) para convertir HTML a objetos Python (lista de dicts). *(Completado – `extract_primary_table()` y validaciones asociadas)*
+  - **Plan de validación**: reglas de negocio (campos obligatorios, tipos, normalización de texto). *(En marcha – validaciones de columnas y valores implementadas, normalización adicional pendiente según nuevos requerimientos)*
 - **Día 5**
-  - **Plan de pruebas**: Fixtures de correos con versiones correctas y variantes con errores.
+  - **Plan de pruebas**: Fixtures de correos con versiones correctas y variantes con errores. *(Completado – ver suites en `src/tests/test_gmail_oauth_service.py` y `src/tests/test_email_service.py`)*
 
-### Semana 6 – Implementación
+### Semana 6 – Implementación (en progreso)
 - **Día 6-7**
-  - Implementar helpers de parsing (`beautifulsoup4` u otra librería) y normalización.
-  - Integrar el parser al flujo `process_incoming_emails()` (OAuth/IMAP) para que los resultados se agreguen al `ProcessingResult`.
+  - Implementar helpers de parsing (`beautifulsoup4` u otra librería) y normalización. *(Parser integrado; normalización avanzada pendiente)*
+  - Integrar el parser al flujo `process_incoming_emails()` (OAuth/IMAP) para que los resultados se agreguen al `ProcessingResult`. *(Completado – ambos servicios registran `parsed_table` y `table_errors`)*
 - **Día 8**
-  - Añadir **validaciones y manejo de errores**: códigos específicos (`table_missing`, `column_missing`, `value_invalid`).
-  - Incluir métricas/resumen en logs.
+  - Añadir **validaciones y manejo de errores**: códigos específicos (`table_missing`, `column_missing`, `value_missing`, `html_missing`). *(Implementado en validadores; métricas adicionales opcionales)*
+  - Incluir métricas/resumen en logs. *(Logs actualizados con `table_errors`; métricas agregadas pendientes si se requieren)*
 - **Día 9**
   - **Tests unitarios** para validaciones y parsing (casos normales y edge cases).
   - **Tests de integración** comprobando que `/process-emails` refleja los datos estructurados y errores cuando aparecen.
+  *(Completado – suites actualizadas cubren casos normales y fallos de tabla)*
 
 ### Semana 7 – Optimización y Documentación
 - **Día 10**

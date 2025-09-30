@@ -34,8 +34,8 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - ✅ **Análisis de asunto**: Identificación del patrón de llegada
 - ✅ **Extracción de fecha**: Obtención de "Generación del..." del cuerpo
 - ✅ **Validación de estructura**: Verificación de archivos requeridos
-- ⏳ **Parsing de tabla HTML**: Extracción de datos adicionales del cuerpo
-- ⏳ **Manejo de errores**: Validación de formato y contenido
+- ✅ **Parsing de tabla HTML**: Extracción de datos adicionales del cuerpo (`parsed_table` en `ProcessingResult`)
+- ✅ **Manejo de errores**: Validación de formato y contenido (`table_errors` con códigos `column_missing`, `value_missing`, `html_missing`)
 
 **Entregables**:
 - Archivos descargados en almacenamiento temporal
@@ -46,7 +46,7 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - Librerías: `imapclient`, `email`, `beautifulsoup4`
 - Almacenamiento temporal local/docker
 
-**Estado**: ✅ **Análisis y diseño completado**
+**Estado**: 🔄 **Implementación en progreso**
 
 ---
 
