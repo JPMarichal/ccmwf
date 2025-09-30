@@ -173,16 +173,17 @@ class DriveService:
             folder_id = self.ensure_generation_folder(fecha_generacion)
         except Exception as exc:
             errors.append({
-                "stage": "ensure_folder",
-                "error": str(exc),
+                "code": "drive_folder_missing",
+                "message": str(exc),
             })
             return None, uploaded, errors
 
         for attachment in attachments:
             if not getattr(attachment, "data", None):
                 errors.append({
+                    "code": "drive_attachment_without_data",
                     "filename": getattr(attachment, "filename", ""),
-                    "error": "attachment_without_data",
+                    "message": "Attachment sin datos binarios",
                 })
                 continue
 
@@ -209,8 +210,9 @@ class DriveService:
                 })
             except Exception as exc:  # noqa: BLE001
                 errors.append({
+                    "code": "drive_upload_failed",
                     "filename": getattr(attachment, "filename", ""),
-                    "error": str(exc),
+                    "message": str(exc),
                 })
 
         return folder_id, uploaded, errors

@@ -324,8 +324,8 @@ class GmailOAuthService:
             if self.drive_service and attachments:
                 if not fecha_generacion:
                     drive_upload_errors.append({
-                        "stage": "preflight",
-                        "error": "missing_fecha_generacion",
+                        "code": "drive_missing_fecha_generacion",
+                        "message": "No se pudo subir archivos porque falta la fecha de generación",
                     })
                 else:
                     distrito = DriveService.guess_primary_district(parsed_table)
@@ -347,8 +347,8 @@ class GmailOAuthService:
                             error=str(exc),
                         )
                         drive_upload_errors.append({
-                            "stage": "upload_attachments",
-                            "error": str(exc),
+                            "code": "drive_upload_failed",
+                            "message": str(exc),
                         })
 
             result = {
@@ -415,7 +415,7 @@ class GmailOAuthService:
                 'table_errors': ['processing_exception'],
                 'drive_folder_id': None,
                 'drive_uploaded_files': [],
-                'drive_upload_errors': [{'stage': 'processing_exception', 'error': str(e)}],
+                'drive_upload_errors': [{'code': 'drive_upload_failed', 'message': str(e)}],
             }
 
     def _get_header_value(self, headers: List[Dict], name: str) -> str:
