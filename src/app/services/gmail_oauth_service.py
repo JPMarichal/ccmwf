@@ -22,6 +22,7 @@ from googleapiclient.errors import HttpError
 from app.config import Settings
 from app.models import EmailMessage, EmailAttachment, ProcessingResult
 from app.services.validators import validate_email_structure
+from app.services.email_html_parser import extract_primary_table
 
 
 class GmailOAuthService:
@@ -270,6 +271,7 @@ class GmailOAuthService:
 
             # Obtener cuerpo del mensaje
             body = self._get_message_body(message['payload'])
+            html_body = self._get_html_body(message['payload'])
 
             # Buscar fecha de generación en el cuerpo
             fecha_generacion = self._extract_fecha_generacion(body)
@@ -298,6 +300,8 @@ class GmailOAuthService:
                 expected_subject_pattern=self.settings.email_subject_pattern,
             )
 
+            parsed_table, table_errors = extract_primary_table(html_body or "")
+
             result = {
                 'success': is_valid,
                 'message_id': msg_id,
@@ -307,6 +311,8 @@ class GmailOAuthService:
                 'fecha_generacion': fecha_generacion,
                 'attachments_count': len(attachments),
                 'validation_errors': validation_errors,
+                'parsed_table': parsed_table,
+                'table_errors': table_errors,
                 'body_preview': body[:200] + "..." if len(body) > 200 else body
             }
 
@@ -320,6 +326,11 @@ class GmailOAuthService:
                                     message_id=msg_id,
                                     errors=validation_errors,
                                     subject=subject)
+
+            if table_errors:
+                self.logger.warning("⚠️ Problemas al parsear tabla HTML",
+                                    message_id=msg_id,
+                                    errors=table_errors)
 
             return result
 
@@ -362,6 +373,24 @@ class GmailOAuthService:
                         body += base64.urlsafe_b64decode(part_data).decode('utf-8', errors='ignore')
 
         return body.strip()
+
+    def _get_html_body(self, payload: Dict) -> str:
+        """Extraer cuerpo HTML del mensaje (concatenado)."""
+        fragments: List[str] = []
+
+        mime_type = payload.get('mimeType')
+        body = payload.get('body', {})
+        data = body.get('data') if isinstance(body, dict) else None
+
+        if mime_type == 'text/html' and data:
+            fragments.append(base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore'))
+
+        for part in payload.get('parts', []) or []:
+            html_part = self._get_html_body(part)
+            if html_part:
+                fragments.append(html_part)
+
+        return "\n".join(fragment for fragment in fragments if fragment).strip()
 
     def _get_all_parts(self, payload: Dict) -> List[Dict]:
         """Obtener todas las partes del mensaje recursivamente"""

@@ -17,6 +17,7 @@ from app.config import Settings
 from app.models import EmailMessage, EmailAttachment, ProcessingResult, EmailStatus
 from app.services.gmail_oauth_service import GmailOAuthService
 from app.services.validators import validate_email_structure
+from app.services.email_html_parser import extract_primary_table
 
 
 class EmailService:
@@ -221,6 +222,7 @@ class EmailService:
 
             # Obtener cuerpo del mensaje
             body = self._get_email_body(email_message)
+            html_body = self._get_email_html(email_message)
 
             # Buscar fecha de generación en el cuerpo
             fecha_generacion = self._extract_fecha_generacion(body)
@@ -258,6 +260,8 @@ class EmailService:
                 except:
                     pass  # Ignorar errores de etiquetado
 
+            parsed_table, table_errors = extract_primary_table(html_body or "")
+
             result = {
                 'success': is_valid,
                 'message_id': msg_id,
@@ -267,6 +271,8 @@ class EmailService:
                 'fecha_generacion': fecha_generacion,
                 'attachments_count': len(attachments),
                 'validation_errors': validation_errors,
+                'parsed_table': parsed_table,
+                'table_errors': table_errors,
                 'body_preview': body[:200] + "..." if len(body) > 200 else body
             }
 
@@ -280,6 +286,11 @@ class EmailService:
                                     message_id=msg_id,
                                     errors=validation_errors,
                                     subject=subject)
+
+            if table_errors:
+                self.logger.warning("⚠️ Problemas al parsear tabla HTML",
+                                    message_id=msg_id,
+                                    errors=table_errors)
 
             return result
 
@@ -329,6 +340,26 @@ class EmailService:
                 body = payload.decode(charset, errors='ignore')
 
         return body.strip()
+
+    def _get_email_html(self, email_message: email.message.Message) -> str:
+        """Extraer cuerpo HTML completo del email"""
+        html_content = []
+
+        if email_message.is_multipart():
+            for part in email_message.walk():
+                if part.get_content_type() == 'text/html':
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or 'utf-8'
+                        html_content.append(payload.decode(charset, errors='ignore'))
+        else:
+            if email_message.get_content_type() == 'text/html':
+                payload = email_message.get_payload(decode=True)
+                if payload:
+                    charset = email_message.get_content_charset() or 'utf-8'
+                    html_content.append(payload.decode(charset, errors='ignore'))
+
+        return "\n".join(html_content).strip()
 
     def _extract_fecha_generacion(self, body: str) -> Optional[str]:
         """Extraer fecha de generación del cuerpo del email"""
