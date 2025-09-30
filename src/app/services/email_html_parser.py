@@ -21,7 +21,7 @@ def extract_primary_table(html: str) -> Tuple[Optional[ParsedTable], List[str]]:
         errors.append("html_missing")
         return None, errors
 
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if table is None:
         errors.append("table_missing")
