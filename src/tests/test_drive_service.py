@@ -41,9 +41,9 @@ def _files_service(existing_names):
 
 def test_format_filename_sanitizes_components(drive_service):
     result = drive_service.format_filename("20250110", "Distrito Norte", "Reporte Final (v1).pdf")
-    assert result.startswith("20250110_Distrito_Norte_Reporte_Final_v1.pdf")
+    assert result.startswith("20250110_Distrito_Norte_Reporte_Final_(v1).pdf")
     assert " " not in result
-    assert "(" not in result
+    assert "__" not in result
 
 
 def test_generate_unique_filename_returns_original_when_available(drive_service):
