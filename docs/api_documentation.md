@@ -75,7 +75,17 @@ Errors are returned using FastAPI's default error schema:
         "subject": "Misioneros que llegan el 10 de enero",
         "fecha_generacion": "20250110",
         "attachments_count": 3,
-        "validation_errors": []
+        "validation_errors": [],
+        "parsed_table": {
+          "headers": ["Distrito", "Zona"],
+          "rows": [
+            {
+              "Distrito": "14A",
+              "Zona": "Benemerito"
+            }
+          ]
+        },
+        "table_errors": []
       }
     ],
     "start_time": "2025-01-10T06:00:04.123Z",
@@ -115,7 +125,9 @@ Cuando uno o más correos no cumplen la estructura esperada, el resultado incluy
           "subject_pattern_mismatch",
           "attachments_missing",
           "fecha_generacion_missing"
-        ]
+        ],
+        "parsed_table": null,
+        "table_errors": ["html_missing"]
       }
     ]
   }
@@ -182,6 +194,8 @@ curl "http://localhost:8000/emails/search?query=subject:%5C"Misioneros%20que%20l
 | Missing OAuth credentials | 500 | Verify `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_TOKEN_PATH` |
 | IMAP login failure | 500 | Check `GMAIL_APP_PASSWORD` or OAuth fallback |
 | Gmail API quota exceeded | 429/500 | Wait and retry, consider exponential backoff |
+| HTML table without required columns (`column_missing:<col>`) | 200 | Revisar el cuerpo del correo y solicitar el formato correcto |
+| HTML table with empty values (`value_missing:<col>:<row>`) | 200 | Corregir datos faltantes antes de reprocesar |
 
 ## Logging & Tracing
 
@@ -191,6 +205,7 @@ Each request writes structured logs using `structlog`. Contextual fields include
 - `message_id`
 - `attachments` count
 - `validation_errors`
+- `table_errors`
 - `duration_seconds`
 - `error`
 
