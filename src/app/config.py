@@ -40,10 +40,11 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    # Google Drive Configuration (para futuras fases)
+    # Google Drive Configuration (para nuevas fases)
     google_drive_credentials_path: Optional[str] = None
     google_drive_token_path: Optional[str] = None
     google_drive_attachments_folder_id: Optional[str] = None
+    generations_backup_folder_id: Optional[str] = None
 
     # Database Configuration (para futuras fases)
     database_url: Optional[str] = None

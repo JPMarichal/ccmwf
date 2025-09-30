@@ -2,7 +2,7 @@
 
 import io
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple, TYPE_CHECKING
 
 import structlog
 from google.oauth2 import service_account
@@ -11,6 +11,9 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
 
 from app.config import Settings
+
+if TYPE_CHECKING:
+    from app.models import EmailAttachment
 
 
 class DriveService:
@@ -152,6 +155,66 @@ class DriveService:
         )
         return drive_file
 
+    def upload_attachments(
+        self,
+        fecha_generacion: str,
+        attachments: List["EmailAttachment"],
+        distrito: Optional[str] = None,
+    ) -> Tuple[Optional[str], List[Dict[str, str]], List[Dict[str, str]]]:
+        """Subir múltiples attachments y devolver resultados."""
+
+        uploaded: List[Dict[str, str]] = []
+        errors: List[Dict[str, str]] = []
+
+        if not attachments:
+            return None, uploaded, errors
+
+        try:
+            folder_id = self.ensure_generation_folder(fecha_generacion)
+        except Exception as exc:
+            errors.append({
+                "stage": "ensure_folder",
+                "error": str(exc),
+            })
+            return None, uploaded, errors
+
+        for attachment in attachments:
+            if not getattr(attachment, "data", None):
+                errors.append({
+                    "filename": getattr(attachment, "filename", ""),
+                    "error": "attachment_without_data",
+                })
+                continue
+
+            drive_filename = self.format_filename(
+                fecha_generacion,
+                distrito,
+                getattr(attachment, "filename", "archivo_sin_nombre"),
+            )
+
+            mime_type = getattr(attachment, "content_type", None) or "application/octet-stream"
+
+            try:
+                drive_file = self.upload_file(
+                    filename=drive_filename,
+                    mime_type=mime_type,
+                    data=attachment.data,
+                    parent_folder_id=folder_id,
+                )
+                uploaded.append({
+                    "id": drive_file.get("id"),
+                    "name": drive_file.get("name"),
+                    "webViewLink": drive_file.get("webViewLink"),
+                    "webContentLink": drive_file.get("webContentLink"),
+                })
+            except Exception as exc:  # noqa: BLE001
+                errors.append({
+                    "filename": getattr(attachment, "filename", ""),
+                    "error": str(exc),
+                })
+
+        return folder_id, uploaded, errors
+
     @staticmethod
     def format_filename(
         fecha_generacion: Optional[str],
@@ -165,6 +228,26 @@ class DriveService:
             if part
         ]
         return "_".join(parts) if parts else sanitized
+
+    @staticmethod
+    def guess_primary_district(parsed_table: Optional[Dict[str, object]]) -> Optional[str]:
+        """Inferir el distrito primario desde la tabla parseada."""
+
+        if not parsed_table:
+            return None
+
+        rows = parsed_table.get("rows") if isinstance(parsed_table, dict) else None
+        if not rows:
+            return None
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key, value in row.items():
+                if "distrito" in key.lower():
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+        return None
 
     def close(self):
         """Liberar el cliente de Drive."""
