@@ -46,7 +46,7 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 - **Día 10**
   - ⚠️ Pruebas unitarias y de integración con mocks de Drive.
 - **Día 11**
-  - ⚠️ Documentar proceso (guías, API docs) y checklist de subida.
+  - ⚠️ Documentar proceso (guías, API docs) y checklist de subida. *(Progreso: `docs/api_documentation.md` actualizado con campos Drive)*
 - **Día 12**
   - ⚠️ Revisión final, retroalimentación y preparación para persistencia (Fase 4).
 
