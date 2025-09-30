@@ -61,9 +61,7 @@ def extract_primary_table(html: str) -> Tuple[Optional[ParsedTable], List[str]]:
         if not cells:
             continue
         row_values = [cell.get_text(strip=True) for cell in cells]
-        # only keep rows with some non-empty content
-        if any(value for value in row_values):
-            rows.append(row_values)
+        rows.append(row_values)
 
     if not rows:
         errors.append("rows_missing")
