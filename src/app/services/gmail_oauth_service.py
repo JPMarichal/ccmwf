@@ -219,7 +219,9 @@ class GmailOAuthService:
                     results.append({
                         'success': False,
                         'error': str(e),
-                        'message_id': msg_id
+                        'message_id': msg_id,
+                        'parsed_table': None,
+                        'table_errors': ['processing_exception']
                     })
 
             end_time = datetime.now()
