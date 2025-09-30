@@ -16,7 +16,7 @@ import asyncio
 from app.config import Settings
 from app.models import EmailMessage, EmailAttachment, ProcessingResult, EmailStatus
 from app.services.gmail_oauth_service import GmailOAuthService
-from app.services.validators import validate_email_structure
+from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
 
 
@@ -261,9 +261,17 @@ class EmailService:
                     pass  # Ignorar errores de etiquetado
 
             parsed_table, table_errors = extract_primary_table(html_body or "")
+            table_errors.extend(
+                validate_table_structure(
+                    parsed_table,
+                    self.settings.email_table_required_columns,
+                )
+            )
+
+            success = is_valid and not table_errors
 
             result = {
-                'success': is_valid,
+                'success': success,
                 'message_id': msg_id,
                 'subject': subject,
                 'sender': sender,
@@ -276,7 +284,7 @@ class EmailService:
                 'body_preview': body[:200] + "..." if len(body) > 200 else body
             }
 
-            if is_valid:
+            if success:
                 self.logger.info("✅ Mensaje procesado correctamente",
                                message_id=msg_id,
                                subject=subject,
@@ -285,6 +293,7 @@ class EmailService:
                 self.logger.warning("⚠️ Validación de estructura fallida",
                                     message_id=msg_id,
                                     errors=validation_errors,
+                                    table_errors=table_errors,
                                     subject=subject)
 
             if table_errors:
@@ -300,7 +309,9 @@ class EmailService:
             return {
                 'success': False,
                 'error': str(e),
-                'message_id': msg_id
+                'message_id': msg_id,
+                'parsed_table': None,
+                'table_errors': ['processing_exception']
             }
 
     def _decode_header(self, header_value: str) -> str:

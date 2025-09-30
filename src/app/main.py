@@ -92,6 +92,8 @@ async def process_emails():
             "result": result
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error procesando emails", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error procesando emails: {str(e)}")
@@ -110,6 +112,8 @@ async def search_emails(query: str = None):
             "emails": emails
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error buscando emails", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error buscando emails: {str(e)}")

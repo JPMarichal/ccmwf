@@ -107,6 +107,7 @@ async def test_process_incoming_emails_success():
     assert result.success is True
     assert result.processed == 1
     detail = result.details[0]
+    assert detail["success"] is True
     assert detail["parsed_table"]["headers"] == ["Distrito", "Zona"]
     assert detail["parsed_table"]["rows"][0]["Distrito"] == "14A"
     assert detail["table_errors"] == []
@@ -157,8 +158,10 @@ async def test_process_incoming_emails_attachment_error():
     service.gmail_service = gmail_service
 
     result = await service.process_incoming_emails()
-    assert result.details[0]["attachments_count"] == 0
-    assert "parsed_table" in result.details[0]
+    detail = result.details[0]
+    assert detail["attachments_count"] == 0
+    assert detail["success"] is False
+    assert "parsed_table" in detail
 
 
 @pytest.mark.asyncio
@@ -220,7 +223,44 @@ async def test_process_incoming_emails_html_missing_generates_error():
 
     detail = result.details[0]
     assert detail["parsed_table"] is None
+    assert detail["success"] is False
     assert "html_missing" in detail["table_errors"]
+
+
+@pytest.mark.asyncio
+async def test_process_incoming_emails_column_missing_generates_error():
+    settings = _build_settings()
+    service = _setup_service(settings)
+    gmail_service, messages, labels = _mock_chain()
+
+    payload = _default_message_payload()
+    # Modify table to keep required columns but leave Zona value empty
+    payload["payload"]["parts"][1]["body"]["data"] = _encode_body(
+        """
+        <html><body>
+        <table>
+          <tr><th>Distrito</th><th>Zona</th></tr>
+          <tr><td>15C</td><td></td></tr>
+        </table>
+        </body></html>
+        """
+    )
+
+    messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
+    messages.get.return_value.execute.return_value = payload
+    attachments = messages.attachments.return_value
+    attachments.get.return_value.execute.return_value = {"data": _encode_body("PDFDATA")}
+
+    labels.create.return_value.execute.return_value = {"id": "lbl123"}
+    messages.modify.return_value.execute.return_value = {}
+
+    service.gmail_service = gmail_service
+
+    result = await service.process_incoming_emails()
+
+    detail = result.details[0]
+    assert detail["success"] is False
+    assert "value_missing:Zona:0" in detail["table_errors"]
 
 
 @pytest.mark.asyncio

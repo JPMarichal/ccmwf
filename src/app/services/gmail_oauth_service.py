@@ -21,7 +21,7 @@ from googleapiclient.errors import HttpError
 
 from app.config import Settings
 from app.models import EmailMessage, EmailAttachment, ProcessingResult
-from app.services.validators import validate_email_structure
+from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
 
 
@@ -303,9 +303,17 @@ class GmailOAuthService:
             )
 
             parsed_table, table_errors = extract_primary_table(html_body or "")
+            table_errors.extend(
+                validate_table_structure(
+                    parsed_table,
+                    self.settings.email_table_required_columns,
+                )
+            )
+
+            success = is_valid and not table_errors
 
             result = {
-                'success': is_valid,
+                'success': success,
                 'message_id': msg_id,
                 'subject': subject,
                 'sender': sender,
@@ -318,7 +326,7 @@ class GmailOAuthService:
                 'body_preview': body[:200] + "..." if len(body) > 200 else body
             }
 
-            if is_valid:
+            if success:
                 self.logger.info("✅ Mensaje procesado correctamente",
                                message_id=msg_id,
                                subject=subject,
@@ -327,6 +335,7 @@ class GmailOAuthService:
                 self.logger.warning("⚠️ Validación de estructura fallida",
                                     message_id=msg_id,
                                     errors=validation_errors,
+                                    table_errors=table_errors,
                                     subject=subject)
 
             if table_errors:

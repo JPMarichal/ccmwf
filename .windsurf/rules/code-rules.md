@@ -7,3 +7,5 @@ Si creas archivos temporales para pruebas rápidas, deberás crear el menor núm
 En cada cambio exitoso, mantén la documentación, el testing y el logging consistentes. 
 
 Debes respetar los principios SOLID y KISS y buscar el arreglo en patrones de diseño siempre que sea conveniente, así como las mejores prácticas recomendadas. Debes procurar el performance y la eficiencia. 
+
+Al correr ejecuciones en terminal debes hacer clear antes de ejecutar comandos que arrojen mucha información sobre pantalla.

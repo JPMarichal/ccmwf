@@ -165,6 +165,41 @@ class TestEmailService:
         assert result['table_errors'] == []
 
     @pytest.mark.asyncio
+    async def test_process_single_imap_email_table_missing_columns(self, email_service):
+        email_service.imap_client = Mock()
+        email_service.imap_client.add_flags = Mock()
+        email_service.imap_client.add_labels = Mock()
+
+        msg = MIMEMultipart()
+        msg['Subject'] = "Misioneros que llegan el 20 de enero"
+        msg['From'] = "test@example.com"
+        msg['Date'] = email.utils.formatdate()
+
+        msg.attach(MIMEText("Generación del 20 de enero de 2025"))
+        html_body = MIMEText(
+            """
+            <html><body>
+              <table>
+                <tr><th>Distrito</th></tr>
+                <tr><td></td></tr>
+              </table>
+            </body></html>
+            """,
+            "html",
+        )
+        msg.attach(html_body)
+
+        attachment = MIMEApplication(b"data", Name="info.pdf")
+        attachment['Content-Disposition'] = 'attachment; filename="info.pdf"'
+        msg.attach(attachment)
+
+        result = await email_service._process_single_imap_email(msg, 789)
+
+        assert result['success'] is False
+        assert any(err.startswith('column_missing:') for err in result['table_errors'])
+        assert any(err.startswith('value_missing:') for err in result['table_errors'])
+
+    @pytest.mark.asyncio
     async def test_ensure_imap_connection_success(self, email_service):
         with patch("app.services.email_service.imapclient.IMAPClient") as mock_imap:
             mock_client = Mock()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Dict
 
 from app.models import EmailAttachment
 
@@ -58,3 +58,56 @@ def validate_email_structure(
             errors.append("pdf_attachment_missing")
 
     return (len(errors) == 0, errors)
+
+
+def validate_table_structure(
+    parsed_table: Optional[Dict[str, object]],
+    required_columns: Iterable[str],
+) -> List[str]:
+    """Validate parsed HTML table contents."""
+
+    if not parsed_table:
+        return []
+
+    errors: List[str] = []
+
+    headers = parsed_table.get("headers") or []
+    if not isinstance(headers, list):
+        return ["headers_invalid"]
+
+    normalized_headers = {header.strip().lower(): header for header in headers if isinstance(header, str)}
+
+    missing_columns = []
+    for column in required_columns:
+        normalized = column.strip().lower()
+        if normalized not in normalized_headers:
+            missing_columns.append(column)
+
+    for column in missing_columns:
+        errors.append(f"column_missing:{column}")
+
+    rows = parsed_table.get("rows") or []
+    if not rows:
+        errors.append("table_rows_missing")
+        return errors
+
+    if missing_columns:
+        return errors
+
+    # Validate row values only if column exists
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            errors.append(f"row_invalid:{index}")
+            continue
+
+        for column in required_columns:
+            normalized = column.strip().lower()
+            header_original = normalized_headers.get(normalized)
+            if not header_original:
+                # Column missing already reported
+                continue
+            value = row.get(header_original)
+            if value is None or not str(value).strip():
+                errors.append(f"value_missing:{column}:{index}")
+
+    return errors
