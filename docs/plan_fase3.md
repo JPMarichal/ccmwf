@@ -24,31 +24,31 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 
 ## Plan Semanal
 
-### Semana 7 – Preparación y Diseño
+### Semana 7 – Preparación y Diseño ✅
 - **Día 1**
-  - Revisar requisitos de Drive (permisos, límites de cuota, estructura deseada).
+  - ✅ Revisar requisitos de Drive (permisos, límites de cuota, estructura deseada). *(Cubierto durante el análisis previo a `DriveService`)*
 - **Día 2**
-  - Definir esquema de carpetas/archivos y convención final de nombres.
+  - ✅ Definir esquema de carpetas/archivos y convención final de nombres. *(Aplicado en `DriveService.format_filename()` y uso de carpetas por generación)*
 - **Día 3**
-  - Diseñar módulos/servicios para subida a Drive (interfaz y dependencias).
+  - ✅ Diseñar módulos/servicios para subida a Drive (interfaz y dependencias). *(Definido en `app/services/drive_service.py`)*
 - **Día 4**
-  - Plan de pruebas: casos de éxito, errores de quota, archivos duplicados, limpieza temporal.
+  - ℹ️ Plan de pruebas: casos de éxito, errores de quota, archivos duplicados, limpieza temporal. *(Plan documentado; ejecución programada para Semana 9)*
 
-### Semana 8 – Implementación
+### Semana 8 – Implementación (iniciada)
 - **Día 5-6**
-  - Implementar cliente Drive (wrapper con autenticación y utilidades).
+  - ✅ Implementar cliente Drive (wrapper con autenticación y utilidades). *(Ver `app/services/drive_service.py`)*
 - **Día 7-8**
-  - Integrar carga de PDFs/XLSX al flujo actual (`EmailService`, `ProcessingResult`).
+  - ⚠️ Integrar carga de PDFs/XLSX al flujo actual (`EmailService`, `ProcessingResult`).
 - **Día 9**
-  - Gestión de errores y reintentos: códigos específicos (`drive_upload_failed`, `drive_folder_missing`).
+  - ⚠️ Gestión de errores y reintentos: códigos específicos (`drive_upload_failed`, `drive_folder_missing`). *(Actualmente se registran errores en logs; falta estandarizar códigos compartidos)*
 
 ### Semana 9 – Pruebas y Documentación
 - **Día 10**
-  - Pruebas unitarias y de integración con mocks de Drive.
+  - ⚠️ Pruebas unitarias y de integración con mocks de Drive.
 - **Día 11**
-  - Documentar proceso (guías, API docs) y checklist de subida.
+  - ⚠️ Documentar proceso (guías, API docs) y checklist de subida.
 - **Día 12**
-  - Revisión final, retroalimentación y preparación para persistencia (Fase 4).
+  - ⚠️ Revisión final, retroalimentación y preparación para persistencia (Fase 4).
 
 ## Riesgos y Mitigaciones
 - **Cuotas de API**: Implementar reintentos con backoff y monitoreo de límites.
