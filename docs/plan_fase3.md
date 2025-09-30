@@ -40,7 +40,7 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 - **Día 7-8**
   - ✅ Integrar carga de PDFs/XLSX al flujo actual (`EmailService`, `ProcessingResult`). *(Implementado con `DriveService` en `app/services/gmail_oauth_service.py` y `app/services/email_service.py`, validado con `pytest`)*
 - **Día 9**
-  - ⚠️ Gestión de errores y reintentos: códigos específicos (`drive_upload_failed`, `drive_folder_missing`). *(Actualmente se registran errores en logs; falta estandarizar códigos compartidos)*
+  - ✅ Gestión de errores y reintentos: códigos específicos (`drive_upload_failed`, `drive_folder_missing`). *(Códigos estandarizados en `app/services/drive_service.py`, `app/services/gmail_oauth_service.py`, `app/services/email_service.py`)*
 
 ### Semana 9 – Pruebas y Documentación
 - **Día 10**
