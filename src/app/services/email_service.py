@@ -18,14 +18,16 @@ from app.models import EmailMessage, EmailAttachment, ProcessingResult, EmailSta
 from app.services.gmail_oauth_service import GmailOAuthService
 from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
+from app.services.drive_service import DriveService
 
 
 class EmailService:
     """Servicio principal para manejo de emails - Soporta OAuth e IMAP"""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
         self.settings = settings
         self.logger = structlog.get_logger()
+        self.drive_service = drive_service
 
         # Detectar si usar OAuth o IMAP basado en configuración
         self.use_oauth = self._should_use_oauth()
@@ -33,7 +35,7 @@ class EmailService:
                         authentication="OAuth" if self.use_oauth else "IMAP")
 
         if self.use_oauth:
-            self.gmail_oauth_service = GmailOAuthService(settings)
+            self.gmail_oauth_service = GmailOAuthService(settings, drive_service=drive_service)
         else:
             self.imap_client = None
             self._connected = False
@@ -273,6 +275,40 @@ class EmailService:
             table_headers_count = len(parsed_table["headers"]) if parsed_table else 0
             table_rows_count = len(parsed_table["rows"]) if parsed_table else 0
 
+            drive_folder_id: Optional[str] = None
+            drive_uploaded_files: List[Dict[str, str]] = []
+            drive_upload_errors: List[Dict[str, str]] = []
+
+            if self.drive_service and attachments:
+                if not fecha_generacion:
+                    drive_upload_errors.append({
+                        "stage": "preflight",
+                        "error": "missing_fecha_generacion",
+                    })
+                else:
+                    distrito = DriveService.guess_primary_district(parsed_table)
+                    try:
+                        folder_id, uploaded, errors = self.drive_service.upload_attachments(
+                            fecha_generacion,
+                            attachments,
+                            distrito,
+                        )
+                        drive_folder_id = folder_id
+                        if uploaded:
+                            drive_uploaded_files = uploaded
+                        if errors:
+                            drive_upload_errors.extend(errors)
+                    except Exception as exc:  # noqa: BLE001
+                        self.logger.error(
+                            "Error subiendo attachments a Drive",
+                            message_id=msg_id,
+                            error=str(exc),
+                        )
+                        drive_upload_errors.append({
+                            "stage": "upload_attachments",
+                            "error": str(exc),
+                        })
+
             result = {
                 'success': success,
                 'message_id': msg_id,
@@ -284,7 +320,10 @@ class EmailService:
                 'validation_errors': validation_errors,
                 'parsed_table': parsed_table,
                 'table_errors': table_errors,
-                'body_preview': body[:200] + "..." if len(body) > 200 else body
+                'body_preview': body[:200] + "..." if len(body) > 200 else body,
+                'drive_folder_id': drive_folder_id,
+                'drive_uploaded_files': drive_uploaded_files,
+                'drive_upload_errors': drive_upload_errors,
             }
 
             if success:
@@ -294,6 +333,11 @@ class EmailService:
                                attachments=len(attachments),
                                table_headers=table_headers_count,
                                table_rows=table_rows_count)
+                if drive_uploaded_files:
+                    self.logger.info("📤 Archivos subidos a Drive",
+                                     message_id=msg_id,
+                                     files=len(drive_uploaded_files),
+                                     drive_folder_id=drive_folder_id)
             else:
                 self.logger.warning("⚠️ Validación de estructura fallida",
                                     message_id=msg_id,
@@ -311,6 +355,11 @@ class EmailService:
                                  headers=table_headers_count,
                                  rows=table_rows_count)
 
+            if drive_upload_errors:
+                self.logger.warning("⚠️ Errores al subir archivos a Drive",
+                                    message_id=msg_id,
+                                    errors=drive_upload_errors)
+
             return result
 
         except Exception as e:
@@ -321,7 +370,10 @@ class EmailService:
                 'error': str(e),
                 'message_id': msg_id,
                 'parsed_table': None,
-                'table_errors': ['processing_exception']
+                'table_errors': ['processing_exception'],
+                'drive_folder_id': None,
+                'drive_uploaded_files': [],
+                'drive_upload_errors': [{'stage': 'processing_exception', 'error': str(e)}]
             }
 
     def _decode_header(self, header_value: str) -> str:
