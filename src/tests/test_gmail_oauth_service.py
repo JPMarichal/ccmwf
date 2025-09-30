@@ -33,6 +33,17 @@ def _http_error(status: int, message: str) -> HttpError:
 
 
 def _default_message_payload() -> dict:
+    html_body = """
+        <html>
+          <body>
+            <p>Generación del 10 de enero de 2025</p>
+            <table>
+              <tr><th>Distrito</th><th>Zona</th></tr>
+              <tr><td>14A</td><td>Benemerito</td></tr>
+            </table>
+          </body>
+        </html>
+    """
     return {
         "payload": {
             "headers": [
@@ -47,7 +58,7 @@ def _default_message_payload() -> dict:
                 },
                 {
                     "mimeType": "text/html",
-                    "body": {"data": _encode_body("<p>Generación del 10 de enero de 2025</p>")},
+                    "body": {"data": _encode_body(html_body)},
                 },
                 {
                     "mimeType": "application/pdf",
@@ -95,6 +106,10 @@ async def test_process_incoming_emails_success():
 
     assert result.success is True
     assert result.processed == 1
+    detail = result.details[0]
+    assert detail["parsed_table"]["headers"] == ["Distrito", "Zona"]
+    assert detail["parsed_table"]["rows"][0]["Distrito"] == "14A"
+    assert detail["table_errors"] == []
     messages.modify.assert_any_call(userId="me", id="msg1", body={"removeLabelIds": ["UNREAD"]})
     messages.modify.assert_any_call(userId="me", id="msg1", body={"addLabelIds": ["lbl123"]})
 
@@ -143,6 +158,7 @@ async def test_process_incoming_emails_attachment_error():
 
     result = await service.process_incoming_emails()
     assert result.details[0]["attachments_count"] == 0
+    assert "parsed_table" in result.details[0]
 
 
 @pytest.mark.asyncio
@@ -178,6 +194,33 @@ async def test_search_emails_error_returns_empty():
 
     service.gmail_service = gmail_service
     assert await service.search_emails("subject:Test") == []
+
+
+@pytest.mark.asyncio
+async def test_process_incoming_emails_html_missing_generates_error():
+    settings = _build_settings()
+    service = _setup_service(settings)
+    gmail_service, messages, labels = _mock_chain()
+
+    payload = _default_message_payload()
+    # Remove HTML part to force error
+    payload["payload"]["parts"] = [payload["payload"]["parts"][0]]
+
+    messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
+    messages.get.return_value.execute.return_value = payload
+    attachments = messages.attachments.return_value
+    attachments.get.return_value.execute.return_value = {"data": _encode_body("PDFDATA")}
+
+    labels.create.return_value.execute.return_value = {"id": "lbl123"}
+    messages.modify.return_value.execute.return_value = {}
+
+    service.gmail_service = gmail_service
+
+    result = await service.process_incoming_emails()
+
+    detail = result.details[0]
+    assert detail["parsed_table"] is None
+    assert "html_missing" in detail["table_errors"]
 
 
 @pytest.mark.asyncio

@@ -66,6 +66,22 @@ def sample_email():
     body = MIMEText("Generación del 15 de enero de 2025")
     msg.attach(body)
 
+    html_body = MIMEText(
+        """
+        <html>
+          <body>
+            <p>Generación del 15 de enero de 2025</p>
+            <table>
+              <tr><th>Distrito</th><th>Zona</th></tr>
+              <tr><td>15B</td><td>Benemerito</td></tr>
+            </table>
+          </body>
+        </html>
+        """,
+        "html",
+    )
+    msg.attach(html_body)
+
     attachment = MIMEApplication(b"data", Name="info.pdf")
     attachment['Content-Disposition'] = 'attachment; filename="info.pdf"'
     msg.attach(attachment)
@@ -112,6 +128,10 @@ class TestEmailService:
         body = email_service._get_email_body(sample_email)
         assert "Generación del 15 de enero de 2025" in body
 
+    def test_get_email_html(self, email_service, sample_email):
+        html = email_service._get_email_html(sample_email)
+        assert "<table>" in html
+
     @pytest.mark.asyncio
     async def test_process_single_imap_email_validation_errors(self, email_service):
         email_service.imap_client = Mock()
@@ -129,6 +149,20 @@ class TestEmailService:
         assert 'validation_errors' in result
         assert 'subject_pattern_mismatch' in result['validation_errors']
         assert 'attachments_missing' in result['validation_errors']
+        assert 'html_missing' in result['table_errors']
+
+    @pytest.mark.asyncio
+    async def test_process_single_imap_email_parses_html_table(self, email_service, sample_email):
+        email_service.imap_client = Mock()
+        email_service.imap_client.add_flags = Mock()
+        email_service.imap_client.add_labels = Mock()
+
+        result = await email_service._process_single_imap_email(sample_email, 456)
+
+        assert result['success'] is True
+        assert result['parsed_table']['headers'] == ['Distrito', 'Zona']
+        assert result['parsed_table']['rows'][0]['Distrito'] == '15B'
+        assert result['table_errors'] == []
 
     @pytest.mark.asyncio
     async def test_ensure_imap_connection_success(self, email_service):
