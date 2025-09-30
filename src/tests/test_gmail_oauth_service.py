@@ -291,7 +291,7 @@ async def test_process_incoming_emails_drive_missing_fecha_generacion():
     detail = result.details[0]
     assert detail["drive_folder_id"] is None
     assert detail["drive_uploaded_files"] == []
-    assert any(err["error"] == "missing_fecha_generacion" for err in detail["drive_upload_errors"])
+    assert any(err.get("code") == "drive_missing_fecha_generacion" for err in detail["drive_upload_errors"])
     drive_service.upload_attachments.assert_not_called()
 
 
