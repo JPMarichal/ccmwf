@@ -85,7 +85,17 @@ Errors are returned using FastAPI's default error schema:
             }
           ]
         },
-        "table_errors": []
+        "table_errors": [],
+        "drive_folder_id": "1ned3xG0oC-SgCUeLXSBADD8PQWV5drVs",
+        "drive_uploaded_files": [
+          {
+            "id": "1abcXYZ",
+            "name": "20250110_14A_info.pdf",
+            "webViewLink": "https://drive.google.com/file/d/1abcXYZ/view",
+            "webContentLink": "https://drive.google.com/file/d/1abcXYZ/download"
+          }
+        ],
+        "drive_upload_errors": []
       }
     ],
     "start_time": "2025-01-10T06:00:04.123Z",
@@ -127,7 +137,15 @@ Cuando uno o más correos no cumplen la estructura esperada, el resultado incluy
           "fecha_generacion_missing"
         ],
         "parsed_table": null,
-        "table_errors": ["html_missing"]
+        "table_errors": ["html_missing"],
+        "drive_folder_id": null,
+        "drive_uploaded_files": [],
+        "drive_upload_errors": [
+          {
+            "stage": "preflight",
+            "error": "missing_fecha_generacion"
+          }
+        ]
       }
     ]
   }
@@ -196,6 +214,7 @@ curl "http://localhost:8000/emails/search?query=subject:%5C"Misioneros%20que%20l
 | Gmail API quota exceeded | 429/500 | Wait and retry, consider exponential backoff |
 | HTML table without required columns (`column_missing:<col>`) | 200 | Revisar el cuerpo del correo y solicitar el formato correcto |
 | HTML table with empty values (`value_missing:<col>:<row>`) | 200 | Corregir datos faltantes antes de reprocesar |
+| Google Drive upload failed (`drive_upload_failed`) | 200 | Revisar `drive_upload_errors`, validar credenciales y permisos en Drive |
 
 ## Logging & Tracing
 
@@ -206,6 +225,9 @@ Each request writes structured logs using `structlog`. Contextual fields include
 - `attachments` count
 - `validation_errors`
 - `table_errors`
+- `drive_folder_id`
+- `drive_uploaded_files`
+- `drive_upload_errors`
 - `duration_seconds`
 - `error`
 
