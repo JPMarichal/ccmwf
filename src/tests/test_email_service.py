@@ -50,9 +50,17 @@ def oauth_settings():
 
 
 @pytest.fixture
-def email_service(imap_settings):
-    """Instancia de EmailService con configuración IMAP."""
-    return EmailService(imap_settings)
+def drive_service_mock():
+    """Servicio de Drive simulado para validar interacción sin realizar subidas reales."""
+    drive_service = Mock()
+    drive_service.upload_attachments.return_value = (None, [], [])
+    return drive_service
+
+
+@pytest.fixture
+def email_service(imap_settings, drive_service_mock):
+    """Instancia de EmailService con configuración IMAP y Drive simulado."""
+    return EmailService(imap_settings, drive_service=drive_service_mock)
 
 
 @pytest.fixture
@@ -92,16 +100,18 @@ def sample_email():
 class TestEmailService:
     """Tests para la clase EmailService."""
 
-    def test_service_initialization(self, imap_settings):
-        service = EmailService(imap_settings)
+    def test_service_initialization(self, imap_settings, drive_service_mock):
+        service = EmailService(imap_settings, drive_service=drive_service_mock)
 
         assert service.settings == imap_settings
         assert service.imap_client is None
         assert service._connected is False
         assert service.use_oauth is False
+        assert service.drive_service is drive_service_mock
 
     def test_should_use_oauth(self, oauth_settings):
-        service = EmailService(oauth_settings)
+        drive_service = Mock()
+        service = EmailService(oauth_settings, drive_service=drive_service)
         assert service.use_oauth is True
 
     def test_extract_fecha_generacion(self, email_service):
@@ -152,10 +162,15 @@ class TestEmailService:
         assert 'html_missing' in result['table_errors']
 
     @pytest.mark.asyncio
-    async def test_process_single_imap_email_parses_html_table(self, email_service, sample_email):
+    async def test_process_single_imap_email_parses_html_table(self, email_service, sample_email, drive_service_mock):
         email_service.imap_client = Mock()
         email_service.imap_client.add_flags = Mock()
         email_service.imap_client.add_labels = Mock()
+        drive_service_mock.upload_attachments.return_value = (
+            "folder123",
+            [{"id": "f1", "name": "20250115_15B_info.pdf", "webViewLink": "view", "webContentLink": "download"}],
+            [],
+        )
 
         result = await email_service._process_single_imap_email(sample_email, 456)
 
@@ -163,12 +178,18 @@ class TestEmailService:
         assert result['parsed_table']['headers'] == ['Distrito', 'Zona']
         assert result['parsed_table']['rows'][0]['Distrito'] == '15B'
         assert result['table_errors'] == []
+        assert result['drive_folder_id'] == "folder123"
+        assert len(result['drive_uploaded_files']) == 1
+        assert result['drive_upload_errors'] == []
+        drive_service_mock.upload_attachments.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_process_single_imap_email_table_missing_columns(self, email_service):
+    async def test_process_single_imap_email_table_missing_columns(self, email_service, drive_service_mock):
         email_service.imap_client = Mock()
         email_service.imap_client.add_flags = Mock()
         email_service.imap_client.add_labels = Mock()
+
+        drive_service_mock.upload_attachments.return_value = ("folder123", [], [])
 
         msg = MIMEMultipart()
         msg['Subject'] = "Misioneros que llegan el 20 de enero"
@@ -198,6 +219,9 @@ class TestEmailService:
         assert result['success'] is False
         assert any(err.startswith('column_missing:') for err in result['table_errors'])
         assert any(err.startswith('value_missing:') for err in result['table_errors'])
+        assert result['drive_folder_id'] == "folder123"
+        assert result['drive_uploaded_files'] == []
+        assert result['drive_upload_errors'] == []
 
     @pytest.mark.asyncio
     async def test_ensure_imap_connection_success(self, email_service):
@@ -251,7 +275,8 @@ class TestEmailService:
             gmail_service.process_incoming_emails.return_value = mock_result
             mock_service_cls.return_value = gmail_service
 
-            service = EmailService(oauth_settings)
+            drive_service = Mock()
+            service = EmailService(oauth_settings, drive_service=drive_service)
             result = await service.process_incoming_emails()
 
             gmail_service.process_incoming_emails.assert_awaited_once()
@@ -266,7 +291,8 @@ class TestEmailService:
             ]
             mock_service_cls.return_value = gmail_service
 
-            service = EmailService(oauth_settings)
+            drive_service = Mock()
+            service = EmailService(oauth_settings, drive_service=drive_service)
             results = await service.search_emails("subject:Test")
 
             gmail_service.search_emails.assert_awaited_once_with("subject:Test")

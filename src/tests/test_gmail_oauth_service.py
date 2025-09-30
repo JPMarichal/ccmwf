@@ -2,7 +2,7 @@
 
 import base64
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from googleapiclient.errors import HttpError
@@ -71,8 +71,8 @@ def _default_message_payload() -> dict:
     }
 
 
-def _setup_service(settings: Settings) -> GmailOAuthService:
-    service = GmailOAuthService(settings)
+def _setup_service(settings: Settings, drive_service: Mock | None = None) -> GmailOAuthService:
+    service = GmailOAuthService(settings, drive_service=drive_service)
     service.authenticate = AsyncMock(return_value=True)
     service._authenticated = True
     return service
@@ -111,6 +111,9 @@ async def test_process_incoming_emails_success():
     assert detail["parsed_table"]["headers"] == ["Distrito", "Zona"]
     assert detail["parsed_table"]["rows"][0]["Distrito"] == "14A"
     assert detail["table_errors"] == []
+    assert detail["drive_folder_id"] is None
+    assert detail["drive_uploaded_files"] == []
+    assert detail["drive_upload_errors"] == []
     messages.modify.assert_any_call(userId="me", id="msg1", body={"removeLabelIds": ["UNREAD"]})
     messages.modify.assert_any_call(userId="me", id="msg1", body={"addLabelIds": ["lbl123"]})
 
@@ -162,6 +165,7 @@ async def test_process_incoming_emails_attachment_error():
     assert detail["attachments_count"] == 0
     assert detail["success"] is False
     assert "parsed_table" in detail
+    assert detail["drive_uploaded_files"] == []
 
 
 @pytest.mark.asyncio
@@ -225,6 +229,70 @@ async def test_process_incoming_emails_html_missing_generates_error():
     assert detail["parsed_table"] is None
     assert detail["success"] is False
     assert "html_missing" in detail["table_errors"]
+    assert detail["drive_uploaded_files"] == []
+
+
+@pytest.mark.asyncio
+async def test_process_incoming_emails_uploads_to_drive():
+    settings = _build_settings()
+    drive_service = Mock()
+    drive_service.upload_attachments.return_value = (
+        "folder123",
+        [{"id": "f1", "name": "20250110_14A_info.pdf", "webViewLink": "view", "webContentLink": "download"}],
+        [],
+    )
+
+    service = _setup_service(settings, drive_service=drive_service)
+    gmail_service, messages, labels = _mock_chain()
+
+    messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
+    messages.get.return_value.execute.return_value = _default_message_payload()
+    attachments = messages.attachments.return_value
+    attachments.get.return_value.execute.return_value = {"data": _encode_body("PDFDATA")}
+
+    labels.create.return_value.execute.return_value = {"id": "lbl123"}
+    messages.modify.return_value.execute.return_value = {}
+
+    service.gmail_service = gmail_service
+
+    result = await service.process_incoming_emails()
+
+    detail = result.details[0]
+    assert detail["drive_folder_id"] == "folder123"
+    assert len(detail["drive_uploaded_files"]) == 1
+    assert detail["drive_upload_errors"] == []
+    drive_service.upload_attachments.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_process_incoming_emails_drive_missing_fecha_generacion():
+    settings = _build_settings()
+    drive_service = Mock()
+    drive_service.upload_attachments.return_value = ("folder123", [], [])
+
+    service = _setup_service(settings, drive_service=drive_service)
+    gmail_service, messages, labels = _mock_chain()
+
+    payload = _default_message_payload()
+    payload["payload"]["parts"][0]["body"]["data"] = _encode_body("Mensaje sin fecha")
+
+    messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
+    messages.get.return_value.execute.return_value = payload
+    attachments = messages.attachments.return_value
+    attachments.get.return_value.execute.return_value = {"data": _encode_body("PDFDATA")}
+
+    labels.create.return_value.execute.return_value = {"id": "lbl123"}
+    messages.modify.return_value.execute.return_value = {}
+
+    service.gmail_service = gmail_service
+
+    result = await service.process_incoming_emails()
+
+    detail = result.details[0]
+    assert detail["drive_folder_id"] is None
+    assert detail["drive_uploaded_files"] == []
+    assert any(err["error"] == "missing_fecha_generacion" for err in detail["drive_upload_errors"])
+    drive_service.upload_attachments.assert_not_called()
 
 
 @pytest.mark.asyncio
