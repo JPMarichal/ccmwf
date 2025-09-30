@@ -2,6 +2,8 @@
 
 import io
 import os
+import re
+from datetime import datetime
 from typing import Dict, Optional, List, Tuple, TYPE_CHECKING
 
 import structlog
@@ -22,6 +24,8 @@ class DriveService:
     SCOPES = [
         "https://www.googleapis.com/auth/drive.file",
     ]
+
+    MAX_FILENAME_LENGTH = 100
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -193,11 +197,20 @@ class DriveService:
                 getattr(attachment, "filename", "archivo_sin_nombre"),
             )
 
+            safe_filename = self._generate_unique_filename(folder_id, drive_filename)
+            if safe_filename != drive_filename:
+                self.logger.info(
+                    "ℹ️ Nombre de archivo ajustado por duplicado",
+                    original=drive_filename,
+                    ajustado=safe_filename,
+                    fecha_generacion=fecha_generacion,
+                )
+
             mime_type = getattr(attachment, "content_type", None) or "application/octet-stream"
 
             try:
                 drive_file = self.upload_file(
-                    filename=drive_filename,
+                    filename=safe_filename,
                     mime_type=mime_type,
                     data=attachment.data,
                     parent_folder_id=folder_id,
@@ -224,12 +237,92 @@ class DriveService:
         original_name: str,
     ) -> str:
         """Generar nombre consistente YYYYMMDD_Distrito_original.ext."""
-        sanitized = original_name.replace(" ", "_")
+        sanitized_original = DriveService._sanitize_filename(original_name)
+        sanitized_district = DriveService._sanitize_component(distrito)
+
         parts = [
-            part for part in [fecha_generacion, (distrito or "").replace(" ", ""), sanitized]
+            part for part in [fecha_generacion, sanitized_district, sanitized_original]
             if part
         ]
-        return "_".join(parts) if parts else sanitized
+        combined = "_".join(parts) if parts else sanitized_original
+        return DriveService._enforce_max_length(combined)
+
+    @classmethod
+    def _sanitize_filename(cls, original_name: str) -> str:
+        value = original_name or "archivo"
+        value = re.sub(r'[<>:"/\\|?*]', "_", value)
+        value = re.sub(r"\s+", "_", value)
+        value = value.strip("_") or "archivo"
+        value = re.sub(r"__+", "_", value)
+        return cls._enforce_max_length(value)
+
+    @classmethod
+    def _sanitize_component(cls, value: Optional[str]) -> str:
+        if not value:
+            return ""
+        sanitized = re.sub(r'[<>:"/\\|?*.]', "_", value)
+        sanitized = re.sub(r"\s+", "_", sanitized)
+        sanitized = sanitized.strip("_")
+        sanitized = re.sub(r"__+", "_", sanitized)
+        return cls._enforce_max_length(sanitized)
+
+    @classmethod
+    def _enforce_max_length(cls, filename: str) -> str:
+        if len(filename) <= cls.MAX_FILENAME_LENGTH:
+            return filename
+
+        base, ext = os.path.splitext(filename)
+        if not ext:
+            return filename[:cls.MAX_FILENAME_LENGTH]
+
+        allowed_base = max(1, cls.MAX_FILENAME_LENGTH - len(ext))
+        return f"{base[:allowed_base]}{ext}"
+
+    def _generate_unique_filename(self, folder_id: str, desired_name: str) -> str:
+        """Evitar colisiones reutilizando convención del wrapper original."""
+
+        self._ensure_service()
+        files_service = self._service.files()
+
+        try:
+            response = files_service.list(
+                q=f"'{folder_id}' in parents and trashed = false",
+                spaces="drive",
+                fields="files(name)",
+                pageSize=1000,
+            ).execute()
+        except HttpError as exc:
+            self.logger.error(
+                "❌ Error obteniendo nombres existentes en carpeta",
+                error=str(exc),
+                folder_id=folder_id,
+            )
+            raise
+
+        existing_names = {
+            file.get("name")
+            for file in (response or {}).get("files", [])
+            if file.get("name")
+        }
+
+        if desired_name not in existing_names:
+            return desired_name
+
+        base, ext = os.path.splitext(desired_name)
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        counter = 0
+
+        while True:
+            suffix = f"_{timestamp}" if counter == 0 else f"_{timestamp}_{counter}"
+            max_base_len = max(1, self.MAX_FILENAME_LENGTH - len(ext) - len(suffix))
+            trimmed_base = base[:max_base_len]
+            candidate = f"{trimmed_base}{suffix}{ext}"
+            candidate = self._enforce_max_length(candidate)
+
+            if candidate not in existing_names:
+                return candidate
+
+            counter += 1
 
     @staticmethod
     def guess_primary_district(parsed_table: Optional[Dict[str, object]]) -> Optional[str]:

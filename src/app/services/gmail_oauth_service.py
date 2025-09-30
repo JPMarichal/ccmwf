@@ -294,7 +294,7 @@ class GmailOAuthService:
                                 data=attachment_data
                             ))
 
-            # Marcar como leído y etiquetado
+            # Marcar como leído y etiquetado una vez completada la extracción
             await self._mark_message_processed(msg_id)
 
             is_valid, validation_errors = validate_email_structure(
