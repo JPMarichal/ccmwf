@@ -1,0 +1,3 @@
+"""
+App package - Email Service
+"""

@@ -1,0 +1,204 @@
+# API Documentation - CCM Email Service
+
+## Overview
+
+The CCM Email Service exposes a REST API built with FastAPI to orchestrate the processing of missionary arrival emails. All endpoints return JSON responses and leverage asynchronous handlers.
+
+- **Base URL (local)**: `http://localhost:8000`
+- **Interactive Swagger UI**: `http://localhost:8000/docs`
+- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+
+## Authentication
+
+- The current phase does **not** require authentication.
+- Future phases will integrate API keys or JWT once the service is exposed externally.
+
+## Response Format
+
+All responses follow the structure below:
+
+```json
+{
+  "success": true,
+  "result": { /* optional payload */ },
+  "detail": "optional message"
+}
+```
+
+Errors are returned using FastAPI's default error schema:
+
+```json
+{
+  "detail": "Error message"
+}
+```
+
+## Endpoints
+
+### 1. Health Check
+
+- **Method**: `GET`
+- **Path**: `/health`
+- **Purpose**: Validate that the API is running.
+- **Response**:
+
+```json
+{
+  "status": "healthy",
+  "service": "email-service",
+  "version": "1.0.0"
+}
+```
+
+### 2. Process Emails
+
+- **Method**: `POST`
+- **Path**: `/process-emails`
+- **Purpose**: Trigger the email processing workflow.
+- **Behavior**:
+  - Uses OAuth or IMAP based on configuration.
+  - Fetches unprocessed emails that match the configured subject pattern.
+  - Extracts body metadata, attachments and marks emails as processed.
+- **Success Response** (`HTTP 200`):
+
+```json
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "processed": 2,
+    "errors": 0,
+    "details": [
+      {
+        "success": true,
+        "message_id": "ABCDEF123",
+        "subject": "Misioneros que llegan el 10 de enero",
+        "fecha_generacion": "20250110",
+        "attachments_count": 3,
+        "validation_errors": []
+      }
+    ],
+    "start_time": "2025-01-10T06:00:04.123Z",
+    "end_time": "2025-01-10T06:00:06.450Z",
+    "duration_seconds": 2.327
+  }
+}
+```
+
+- **Error Response** (`HTTP 500`):
+
+```json
+{
+  "detail": "Error procesando emails: Processing error"
+}
+```
+
+- **Validation Failure Response** (`HTTP 200`)
+
+Cuando uno o más correos no cumplen la estructura esperada, el resultado incluye `validation_errors` para cada mensaje y el campo `success` se marca en `false` a nivel de detalle:
+
+```json
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "processed": 0,
+    "errors": 1,
+    "details": [
+      {
+        "success": false,
+        "message_id": "GHI789",
+        "subject": "Correo irrelevante",
+        "fecha_generacion": null,
+        "attachments_count": 0,
+        "validation_errors": [
+          "subject_pattern_mismatch",
+          "attachments_missing",
+          "fecha_generacion_missing"
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 3. Search Emails (Debug/Test)
+
+- **Method**: `GET`
+- **Path**: `/emails/search`
+- **Query Parameters**:
+  - `query` *(optional)*: Custom Gmail search string.
+- **Purpose**: Inspect recent emails for debugging.
+- **Success Response** (`HTTP 200`):
+
+```json
+{
+  "success": true,
+  "emails": [
+    {
+      "id": "ABC123",
+      "subject": "Misioneros que llegan el 10 de enero",
+      "sender": "natalia.leyva@ccm.org",
+      "date": "Fri, 10 Jan 2025 06:12:31 +0000",
+      "has_attachments": true
+    }
+  ]
+}
+```
+
+- **Error Response** (`HTTP 500`):
+
+```json
+{
+  "detail": "Error buscando emails: Connection reset"
+}
+```
+
+## Testing the API
+
+### Via Swagger UI
+
+1. Start the application.
+2. Navigate to `http://localhost:8000/docs`.
+3. Use the **Try it out** button for each endpoint.
+
+### Via HTTP client (curl example)
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Process emails
+curl -X POST http://localhost:8000/process-emails
+
+# Search emails
+curl "http://localhost:8000/emails/search?query=subject:%5C"Misioneros%20que%20llegan%5C""
+```
+
+## Error Handling
+
+| Error Scenario | HTTP Code | Suggested Action |
+|----------------|-----------|------------------|
+| Missing OAuth credentials | 500 | Verify `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_TOKEN_PATH` |
+| IMAP login failure | 500 | Check `GMAIL_APP_PASSWORD` or OAuth fallback |
+| Gmail API quota exceeded | 429/500 | Wait and retry, consider exponential backoff |
+
+## Logging & Tracing
+
+Each request writes structured logs using `structlog`. Contextual fields include:
+
+- `authentication` (OAuth/IMAP)
+- `message_id`
+- `attachments` count
+- `validation_errors`
+- `duration_seconds`
+- `error`
+
+Log file location is defined by `LOG_FILE_PATH` (defaults to `logs/email_service.log`).
+
+## Future Extensions
+
+- Authentication (JWT/API keys).
+- Pagination on `/emails/search`.
+- Webhook-like async processing.
+- Integration with Google Drive and further services in upcoming project phases.
