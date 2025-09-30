@@ -312,6 +312,9 @@ class GmailOAuthService:
 
             success = is_valid and not table_errors
 
+            table_headers_count = len(parsed_table["headers"]) if parsed_table else 0
+            table_rows_count = len(parsed_table["rows"]) if parsed_table else 0
+
             result = {
                 'success': success,
                 'message_id': msg_id,
@@ -330,7 +333,9 @@ class GmailOAuthService:
                 self.logger.info("✅ Mensaje procesado correctamente",
                                message_id=msg_id,
                                subject=subject,
-                               attachments=len(attachments))
+                               attachments=len(attachments),
+                               table_headers=table_headers_count,
+                               table_rows=table_rows_count)
             else:
                 self.logger.warning("⚠️ Validación de estructura fallida",
                                     message_id=msg_id,
@@ -342,6 +347,11 @@ class GmailOAuthService:
                 self.logger.warning("⚠️ Problemas al parsear tabla HTML",
                                     message_id=msg_id,
                                     errors=table_errors)
+            elif parsed_table:
+                self.logger.info("📊 Tabla HTML extraída",
+                                 message_id=msg_id,
+                                 headers=table_headers_count,
+                                 rows=table_rows_count)
 
             return result
 
