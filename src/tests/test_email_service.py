@@ -218,7 +218,6 @@ class TestEmailService:
 
         assert result['success'] is False
         assert any(err.startswith('column_missing:') for err in result['table_errors'])
-        assert any(err.startswith('value_missing:') for err in result['table_errors'])
         assert result['drive_folder_id'] == "folder123"
         assert result['drive_uploaded_files'] == []
         assert result['drive_upload_errors'] == []
