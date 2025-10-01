@@ -34,26 +34,26 @@ Procesar el contenido del correo recibido desde Gmail, validando su estructura y
 - **Día 5**
   - **Plan de pruebas**: Fixtures de correos con versiones correctas y variantes con errores. *(Completado – ver suites en `src/tests/test_gmail_oauth_service.py` y `src/tests/test_email_service.py`)*
 
-### Semana 6 – Implementación (en progreso)
+### Semana 6 – Implementación ✅
 - **Día 6-7**
-  - Implementar helpers de parsing (`beautifulsoup4` u otra librería) y normalización. *(Parser integrado; normalización avanzada pendiente)*
-  - Integrar el parser al flujo `process_incoming_emails()` (OAuth/IMAP) para que los resultados se agreguen al `ProcessingResult`. *(Completado – ambos servicios registran `parsed_table` y `table_errors`)*
+  - Implementar helpers de parsing (`beautifulsoup4` u otra librería) y normalización. *(Completado: `extract_primary_table()` identifica encabezados, `extra_texts` y usa alias de columnas en `validators.py`)*
+  - Integrar el parser al flujo `process_incoming_emails()` (OAuth/IMAP) para que los resultados se agreguen al `ProcessingResult`. *(Completado – ambos servicios registran `parsed_table`, `table_errors` y `extra_texts`)*
 - **Día 8**
-  - Añadir **validaciones y manejo de errores**: códigos específicos (`table_missing`, `column_missing`, `value_missing`, `html_missing`). *(Implementado en validadores; métricas adicionales opcionales)*
-  - Incluir métricas/resumen en logs. *(Logs actualizados con `table_errors`; métricas agregadas pendientes si se requieren)*
+  - Añadir **validaciones y manejo de errores**: códigos específicos (`table_missing`, `column_missing`, `value_missing`, `html_missing`). *(Completado – ver `app/services/validators.py`)*
+  - Incluir métricas/resumen en logs. *(Logs incluyen `table_errors`, `validation_errors`, `extra_texts`; métricas consolidadas en `docs/performance_metrics.md`)*
 - **Día 9**
   - **Tests unitarios** para validaciones y parsing (casos normales y edge cases).
   - **Tests de integración** comprobando que `/process-emails` refleja los datos estructurados y errores cuando aparecen.
   *(Completado – suites actualizadas cubren casos normales y fallos de tabla)*
 
-### Semana 7 – Optimización y Documentación
+### Semana 7 – Optimización y Documentación ✅
 - **Día 10**
-  - Revisar performance (tiempos de parsing, manejo de grandes tablas).
-  - Ajustar logging y mensajes de error.
+  - Revisar performance (tiempos de parsing, manejo de grandes tablas). *(Completado – `tmp_phase2_metrics.py` arrojó **68.57 ms** promedio con `originalBody.html`; ver `docs/performance_metrics.md`)*
+  - Ajustar logging y mensajes de error. *(Se consolidaron campos en `ProcessingResult.details` y se documentaron alias y métricas)
 - **Día 11**
-  - Actualizar documentación (`docs/api_documentation.md`, `docs/development_guide.md`, `docs/plan_fase1.md`).
+  - Actualizar documentación (`docs/api_documentation.md`, `docs/development_guide.md`, `docs/plan_fase1.md`). *(Actualizado: API expone `extra_texts`; `performance_metrics.md` registra resultados)*
 - **Día 12**
-  - Retroalimentación y preparación para la Fase 3 (organización en Google Drive): definir qué datos del parsing serán insumo directo.
+  - Retroalimentación y preparación para la Fase 3 (organización en Google Drive): definir qué datos del parsing serán insumo directo. *(Completado – handoff describe `headers`, `rows`, `extra_texts`, `drive_upload_errors` como insumos para Drive)*
 
 ## Riesgos y Mitigaciones
 - **Variaciones en la estructura HTML**: mantener parser tolerante y agregar reglas configurables.
