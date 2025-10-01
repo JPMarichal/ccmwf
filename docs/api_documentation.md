@@ -59,6 +59,7 @@ Errors are returned using FastAPI's default error schema:
   - Uses OAuth or IMAP based on configuration.
   - Fetches unprocessed emails that match the configured subject pattern.
   - Extracts body metadata, attachments and marks emails as processed.
+  - Derives `fecha_generacion` combinando texto plano, HTML y títulos de tablas (cabeceras tipo "Generación del ...") antes de validar adjuntos.
 - **Success Response** (`HTTP 200`):
 
 ```json
@@ -83,6 +84,9 @@ Errors are returned using FastAPI's default error schema:
               "Distrito": "14A",
               "Zona": "Benemerito"
             }
+          ],
+          "extra_texts": [
+            "Generación del 10 de enero de 2025"
           ]
         },
         "table_errors": [],
@@ -151,6 +155,12 @@ Cuando uno o más correos no cumplen la estructura esperada, el resultado incluy
   }
 }
 ```
+
+#### Campos de `parsed_table`
+
+- **`headers`**: Lista en el orden detectado, normalizada a partir de celdas `<th>` o de la primera fila con múltiples valores.
+- **`rows`**: Filas de datos mapeadas a los encabezados; las celdas faltantes se completan con cadenas vacías para garantizar consistencia.
+- **`extra_texts`**: Texto contextual localizado antes de los encabezados (por ejemplo, títulos como "Generación del ..."), reutilizado para extraer `fecha_generacion` cuando el cuerpo no la incluye.
 
 ### 3. Search Emails (Debug/Test)
 
