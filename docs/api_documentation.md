@@ -60,6 +60,7 @@ Errors are returned using FastAPI's default error schema:
   - Fetches unprocessed emails that match the configured subject pattern.
   - Extracts body metadata, attachments and marks emails as processed.
   - Derives `fecha_generacion` combinando texto plano, HTML y títulos de tablas (cabeceras tipo "Generación del ...") antes de validar adjuntos.
+  - Reutiliza un único consentimiento OAuth (installed app) para Gmail y Google Drive; el token se guarda en `GOOGLE_TOKEN_PATH` y debe incluir los scopes de lectura Gmail y escritura Drive.
 - **Success Response** (`HTTP 200`):
 
 ```json
@@ -225,6 +226,7 @@ curl "http://localhost:8000/emails/search?query=subject:%5C"Misioneros%20que%20l
 | HTML table without required columns (`column_missing:<col>`) | 200 | Revisar el cuerpo del correo y solicitar el formato correcto |
 | HTML table with empty values (`value_missing:<col>:<row>`) | 200 | Corregir datos faltantes antes de reprocesar |
 | Google Drive upload failed (`drive_upload_failed`) | 200 | Revisar `drive_upload_errors`, validar credenciales y permisos en Drive |
+| Google Drive insufficient permissions | 200 | Eliminar `GOOGLE_TOKEN_PATH` y reautorizar para incluir el scope `https://www.googleapis.com/auth/drive` |
 
 ## Logging & Tracing
 
