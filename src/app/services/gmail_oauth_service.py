@@ -37,7 +37,8 @@ class GmailOAuthService:
     SCOPES = [
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/gmail.modify',
-        'https://www.googleapis.com/auth/gmail.labels'
+        'https://www.googleapis.com/auth/gmail.labels',
+        'https://www.googleapis.com/auth/drive',
     ]
 
     def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
@@ -74,6 +75,9 @@ class GmailOAuthService:
             self.credentials = creds
             self.gmail_service = build('gmail', 'v1', credentials=creds)
             self._authenticated = True
+
+            if self.drive_service:
+                self.drive_service.set_oauth_credentials(creds)
 
             self.logger.info("✅ Autenticación OAuth exitosa")
             return True

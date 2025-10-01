@@ -1,13 +1,16 @@
-"""Servicio para interacción con Google Drive."""
+"""Servicio para interacción con Google Drive utilizando OAuth de usuario."""
 
 import io
 import os
 import re
+import pickle
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple, TYPE_CHECKING
 
 import structlog
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
@@ -19,10 +22,10 @@ if TYPE_CHECKING:
 
 
 class DriveService:
-    """Encapsula operaciones comunes contra Google Drive."""
+    """Encapsula operaciones comunes contra Google Drive usando credenciales OAuth de usuario."""
 
     SCOPES = [
-        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive",
     ]
 
     MAX_FILENAME_LENGTH = 100
@@ -31,26 +34,99 @@ class DriveService:
         self.settings = settings
         self.logger = structlog.get_logger()
         self._service = None
+        self._oauth_credentials: Optional[Credentials] = None
 
     def _ensure_service(self):
         """Inicializar el cliente de Drive una sola vez."""
         if self._service is not None:
             return
 
-        credentials_path = self.settings.google_drive_credentials_path
-        if not credentials_path:
-            raise ValueError("No se definió GOOGLE_DRIVE_CREDENTIALS_PATH en la configuración")
+        credentials = self._obtain_credentials()
 
-        if not os.path.exists(credentials_path):
-            raise FileNotFoundError(f"No se encontró el archivo de credenciales de Drive: {credentials_path}")
-
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path,
-            scopes=self.SCOPES,
-        )
+        if not credentials:
+            raise ValueError(
+                "No se pudieron obtener credenciales OAuth para Google Drive. "
+                "Ejecuta el flujo OAuth o comparte las credenciales desde GmailOAuthService."
+            )
 
         self._service = build("drive", "v3", credentials=credentials)
+        self._oauth_credentials = credentials
         self.logger.info("✅ Cliente de Google Drive inicializado correctamente")
+
+    def set_oauth_credentials(self, creds: Credentials) -> None:
+        """Recibir credenciales OAuth (por ejemplo, compartidas desde GmailOAuthService)."""
+
+        if not creds:
+            return
+
+        self._oauth_credentials = creds
+        self._service = None  # Forzar re-creación con las nuevas credenciales
+        self.logger.info("🔐 Credenciales OAuth de Drive actualizadas desde Gmail")
+
+    def _obtain_credentials(self) -> Optional[Credentials]:
+        """Obtener credenciales OAuth usando el mismo flujo que Gmail (installed app)."""
+
+        creds = self._oauth_credentials
+
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("⚠️ Error refrescando token de Drive", error=str(exc))
+                creds = None
+
+        if creds and creds.valid:
+            return creds
+
+        credentials_path = (
+            self.settings.google_application_credentials
+            or self.settings.google_drive_credentials_path
+        )
+        token_path = (
+            self.settings.google_token_path
+            or self.settings.google_drive_token_path
+        )
+
+        if token_path and os.path.exists(token_path):
+            try:
+                with open(token_path, "rb") as token_file:
+                    creds = pickle.load(token_file)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("⚠️ No se pudo cargar token OAuth existente", error=str(exc))
+                creds = None
+
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("⚠️ Error refrescando token OAuth", error=str(exc))
+                creds = None
+
+        if creds and creds.valid:
+            return creds
+
+        if not credentials_path or not os.path.exists(credentials_path):
+            self.logger.error(
+                "❌ No se encontró archivo de credenciales para iniciar flujo OAuth de Drive",
+                credentials_path=credentials_path,
+            )
+            return None
+
+        flow = InstalledAppFlow.from_client_secrets_file(
+            credentials_path,
+            self.SCOPES,
+        )
+
+        creds = flow.run_local_server(port=0, prompt="consent", authorization_prompt_message="")
+
+        if token_path:
+            try:
+                with open(token_path, "wb") as token_file:
+                    pickle.dump(creds, token_file)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("⚠️ No se pudo guardar token OAuth", error=str(exc))
+
+        return creds
 
     def ensure_generation_folder(self, fecha_generacion: str) -> str:
         """Crear (si es necesario) y devolver la carpeta para una generación específica."""

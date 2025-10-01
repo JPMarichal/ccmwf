@@ -4,7 +4,7 @@ Configuración de la aplicación Email Service
 
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any
 from pydantic import field_validator, Field
 from pydantic_settings import BaseSettings
 import structlog
@@ -82,6 +82,27 @@ class Settings(BaseSettings):
         if v.lower() not in valid_envs:
             raise ValueError(f'App env must be one of: {valid_envs}')
         return v.lower()
+
+    def model_post_init(self, __context: Any) -> None:  # noqa: D401
+        """Normaliza rutas relativas para credenciales después de cargar el .env."""
+        credential_fields = [
+            'google_application_credentials',
+            'google_token_path',
+            'google_drive_credentials_path',
+            'google_drive_token_path',
+            'google_sheets_credentials_path',
+        ]
+
+        for field_name in credential_fields:
+            value = getattr(self, field_name, None)
+            if not value:
+                continue
+
+            path = Path(value)
+            if not path.is_absolute():
+                path = PROJECT_ROOT / path
+
+            object.__setattr__(self, field_name, str(path))
 
 
 def get_settings() -> Settings:
