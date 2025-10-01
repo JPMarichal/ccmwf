@@ -297,7 +297,14 @@ class GmailOAuthService:
             if 'parts' in message['payload']:
                 for part in self._get_all_parts(message['payload']):
                     if part.get('filename') and part['filename']:
-                        attachment_data = self._get_attachment_data(msg_id, part['partId'])
+                        attachment_id = (
+                            part.get('body', {}).get('attachmentId')
+                            if isinstance(part.get('body'), dict)
+                            else None
+                        )
+                        if not attachment_id:
+                            continue
+                        attachment_data = self._get_attachment_data(msg_id, attachment_id)
                         if attachment_data:
                             attachments.append(EmailAttachment(
                                 filename=part['filename'],

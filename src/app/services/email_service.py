@@ -249,14 +249,16 @@ class EmailService:
                     continue
 
                 filename = part.get_filename()
-                if filename:
-                    attachment_data = part.get_payload(decode=True)
-                    attachments.append(EmailAttachment(
-                        filename=filename,
-                        size=len(attachment_data) if attachment_data else 0,
-                        content_type=part.get_content_type(),
-                        data=attachment_data
-                    ))
+                if not filename:
+                    continue
+
+                attachment_data = part.get_payload(decode=True)
+                attachments.append(EmailAttachment(
+                    filename=filename,
+                    size=len(attachment_data) if attachment_data else 0,
+                    content_type=part.get_content_type(),
+                    data=attachment_data
+                ))
 
             is_valid, validation_errors = validate_email_structure(
                 subject=subject,

@@ -8,6 +8,11 @@ from typing import Iterable, List, Optional, Dict
 from app.models import EmailAttachment
 
 
+_COLUMN_ALIASES: Dict[str, List[str]] = {
+    "zona": ["zona horaria"],
+}
+
+
 _SUBJECT_NORMALIZER = re.compile(r"\s+")
 
 
@@ -77,10 +82,24 @@ def validate_table_structure(
 
     normalized_headers = {header.strip().lower(): header for header in headers if isinstance(header, str)}
 
+    def _alias_candidates(column_name: str) -> List[str]:
+        normalized = column_name.strip().lower()
+        aliases = _COLUMN_ALIASES.get(normalized, [])
+        return [normalized, *[alias.strip().lower() for alias in aliases]]
+
+    alias_resolution: Dict[str, str] = {}
     missing_columns = []
     for column in required_columns:
         normalized = column.strip().lower()
-        if normalized not in normalized_headers:
+        header_match = None
+        for candidate in _alias_candidates(column):
+            candidate = candidate.strip().lower()
+            header_match = normalized_headers.get(candidate)
+            if header_match:
+                break
+        if header_match:
+            alias_resolution[normalized] = header_match
+        else:
             missing_columns.append(column)
 
     for column in missing_columns:
@@ -102,7 +121,7 @@ def validate_table_structure(
 
         for column in required_columns:
             normalized = column.strip().lower()
-            header_original = normalized_headers.get(normalized)
+            header_original = alias_resolution.get(normalized)
             if not header_original:
                 # Column missing already reported
                 continue
