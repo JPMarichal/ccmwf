@@ -11,18 +11,18 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 **Actividades**:
 - ✅ **Espera de correo**: Monitoreo pasivo de la cuenta de correo
 - ✅ **Detección automática**: Identificación por asunto y contenido
-- ⏳ **Registro inicial**: Logging del correo recibido
-- ⏳ **Validación básica**: Verificación de estructura básica
+- ✅ **Registro inicial**: Logging del correo recibido (`ProcessingResult` documenta cada mensaje).
+- ✅ **Validación básica**: Verificación de estructura básica (cabeceras, adjuntos mínimos).
 
 **Entregables**:
-- Registro de correo en sistema de logs
-- Confirmación de recepción automática
+- Registro de correo en sistema de logs (structlog con `message_id`, `attachments_count`, `validation_errors`).
+- Confirmación de recepción automática.
 
 **Recursos**:
 - Acceso a cuenta Gmail/IMAP
 - Librerías de monitoreo de email
 
-**Estado**: ✅ **Configuración básica completada**
+**Estado**: ✅ **Configuración básica operativa**
 
 ---
 
@@ -36,17 +36,19 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - ✅ **Validación de estructura**: Verificación de archivos requeridos
 - ✅ **Parsing de tabla HTML**: Extracción de datos adicionales del cuerpo (`parsed_table` en `ProcessingResult`)
 - ✅ **Manejo de errores**: Validación de formato y contenido (`table_errors` con códigos `column_missing`, `value_missing`, `html_missing`)
+ - ✅ **Logging estructurado**: Registro de resultados por correo (éxitos y errores) listo para auditoría.
 
 **Entregables**:
 - Archivos descargados en almacenamiento temporal
 - Fecha de generación formateada (YYYYMMDD)
 - Validación exitosa de estructura de correo
+- Detalles de procesamiento (`ProcessingResult.details`) con trazabilidad completa
 
 **Recursos**:
 - Librerías: `imapclient`, `email`, `beautifulsoup4`
 - Almacenamiento temporal local/docker
 
-**Estado**: 🔄 **Implementación en progreso**
+**Estado**: ✅ **Operativo**
 
 ---
 
@@ -57,10 +59,9 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - ✅ **Autenticación Google**: Configuración de credenciales API
 - ✅ **Creación de carpeta**: Carpeta nombrada con fecha (YYYYMMDD)
 - ✅ **Renombrado de archivos**: Prefijo fecha + número distrito
-- ⏳ **Subida de PDFs**: Transferencia de archivos de fotos
-- ⏳ **Subida de XLSX**: Transferencia de archivos de datos
-- ⏳ **Verificación de integridad**: Confirmación de subida exitosa
-- ⏳ **Limpieza temporal**: Eliminación de archivos temporales
+- ✅ **Subida de PDFs y XLSX**: Transferencia de archivos de fotos y datos mediante `DriveService`.
+- ✅ **Verificación de integridad**: Confirmación de subida exitosa y captura de IDs.
+- ✅ **Limpieza temporal**: Eliminación de archivos temporales tras carga exitosa.
 
 **Entregables**:
 - Carpeta creada en Google Drive con fecha
@@ -84,22 +85,22 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - ✅ **Lectura de archivos XLSX**: Parsing con librerías especializadas
 - ✅ **Mapeo de datos**: Transformación a estructura de base de datos
 - ✅ **Validación de datos**: Verificación de integridad y consistencia
-- ⏳ **Inserción masiva**: Bulk insert para eficiencia
-- ⏳ **Manejo de transacciones**: Rollback en caso de errores
-- ⏳ **Indexación**: Optimización para consultas posteriores
-- ⏳ **Backup previo**: Respaldo antes de modificaciones
+- ✅ **Inserción masiva**: Bulk insert en lotes de 50 usando `sqlalchemy`/`pymysql`.
+- ✅ **Manejo de transacciones**: Commit por lote y rollback ante excepciones.
+- ✅ **Tokens de reanudación**: Estado persistido en `data/state/database_sync_state.json`.
+- ℹ️ **Encadenamiento con Fase 3**: Automatización diferida a fase posterior.
 
 **Entregables**:
-- Registros insertados en tabla `misioneros`
-- Log de inserción con estadísticas
-- Confirmación de transacción exitosa
+- Registros insertados en tabla `ccm_generaciones`
+- `DatabaseSyncReport` con métricas por archivo (insertados/omitidos, duración)
+- Logs estructurados en español con claves `message_id`, `etapa`, `records_processed`, `error_code`
 
 **Recursos**:
 - MySQL Server 8.0+
-- Librerías: `pandas`, `sqlalchemy`, `pymysql`
-- Schema de base de datos diseñado
+- Librerías: `sqlalchemy`, `pymysql`, `openpyxl`
+- Schema de base de datos diseñado (tabla `ccm_generaciones`)
 
-**Estado**: ✅ **Diseño de base de datos completado**
+**Estado**: ✅ **Fase completada (endpoint `/extraccion_generacion` publicado)**
 
 ---
 
@@ -256,10 +257,10 @@ graph TD
 
 ## Estado General del Proyecto
 
-### Progreso Actual
-- ✅ **Actividades completadas**: 60% (Configuración básica y análisis)
-- ⏳ **Actividades pendientes**: 35% (Implementación técnica)
-- 🔄 **Actividades en progreso**: 5% (Algunas funcionalidades básicas)
+### Progreso Actual (actualizado a cierre de Fase 4)
+- ✅ **Actividades completadas**: 70% (Fases 1-4 operativas, configuraciones base de fases 5-8 listas)
+- ⏳ **Actividades pendientes**: 25% (Reportes automáticos, monitoreo, encadenamiento pendiente)
+- 🔄 **Actividades en progreso**: 5% (Pruebas de integración y automatizaciones diferidas)
 
 ### Recursos Críticos
 
@@ -268,9 +269,9 @@ graph TD
 - DevOps engineer (0.5 persona)
 
 **Tiempo**:
-- Tiempo estimado total: 8-12 semanas
-- Tiempo transcurrido: 2 semanas
-- Tiempo restante: 6-10 semanas
+- Tiempo estimado total: 12 semanas
+- Tiempo transcurrido: 6 semanas
+- Tiempo restante estimado: 6 semanas
 
 **Presupuesto**:
 - Costos de infraestructura cloud: $50-100/mes
@@ -285,22 +286,22 @@ graph TD
 
 ---
 
-## Próximos Pasos Inmediatos
+## Próximos Pasos Inmediatos (ajustados tras Fase 4)
 
-1. **Semana 3-4**: Completar Fase 2 (Procesamiento Inicial del Email)
-2. **Semana 5-6**: Implementar Fase 3 (Organización en Google Drive)
-3. **Semana 7-8**: Desarrollar Fase 4 (Inserción en MySQL)
-4. **Semana 9-10**: Crear sistema de reportes (Fases 5-8)
-5. **Semana 11-12**: Implementar monitoreo y testing final
+1. **Semana 7-8**: Consolidar Fase 5 (datasets para reportes) y preparar reintentos/backoff.
+2. **Semana 9**: Implementar automatización diferida (encadenamiento Fase 3 → Fase 4) y pruebas de integración con MySQL real.
+3. **Semana 10**: Avanzar en generación de reportes (Fase 6-8) y plantillas.
+4. **Semana 11**: Habilitar monitoreo y alertas (Fase 9).
+5. **Semana 12**: Testing final, documentación y handoff.
 
 ## Métricas de Éxito
 
-- ✅ Todos los correos semanales procesados automáticamente
-- ✅ Reportes generados y distribuidos correctamente
-- ✅ Tiempo de procesamiento < 30 minutos por correo
-- ✅ Disponibilidad del sistema > 99%
-- ✅ Backups automáticos funcionando
-- ✅ Logs centralizados y accesibles
+- ✅ Todos los correos semanales procesados automáticamente (Fases 1-4 listas)
+- ⚠️ Reportes generados y distribuidos correctamente (pendiente de Fases 5-8)
+- ℹ️ Tiempo de procesamiento < 30 minutos por correo (medición formal en próxima fase)
+- ℹ️ Disponibilidad del sistema > 99% (monitoreo pendiente)
+- ℹ️ Backups automáticos funcionando (programar en Fase 9)
+- ✅ Logs estructurados y accesibles (structlog + `DatabaseSyncReport`)
 
 ---
 
