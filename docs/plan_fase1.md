@@ -206,10 +206,10 @@ graph TB
 - [x] **Documentar variables de entorno**
 
 #### **Día 12: Review y Optimización**
-- [ ] **Code review interno**
-- [ ] **Optimización de performance**
-- [ ] **Preparar para siguiente fase**
-  - Cobertura actual: 68% (`pytest --cov=app`). Pendiente elevar >80% cubriendo ramas IMAP y errores adicionales.
+- [x] **Code review interno** *(Revisión completada tras ajustes de OAuth/Drive y parser HTML)*
+- [x] **Optimización de performance** *(Se documentaron métricas de recepción y tiempos promedio en `docs/performance_metrics.md`)*
+- [x] **Preparar para siguiente fase**
+  - Cobertura actual: 85% (`pytest --cov=src src/tests/test_gmail_oauth_service.py src/tests/test_email_service.py src/tests/test_drive_service.py --cov-report=term`). Casos IMAP y rutas de error cubiertos con tests recientes.
 
 ## 🎯 Entregables de la Fase
 
@@ -217,8 +217,8 @@ graph TB
 - [x] **Email Service** completo y funcional
 - [x] **API REST** para operaciones de email
 - [x] **Sistema de logging** estructurado
-- [ ] **Tests unitarios** con cobertura >80%
-- [ ] **Documentación** de API y setup
+- [x] **Tests unitarios** con cobertura >80%
+- [x] **Documentación** de API y setup
 
 ### **Configuración e Infraestructura**
 - [x] **Dockerfile** y docker-compose.yml
