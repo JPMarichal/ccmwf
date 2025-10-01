@@ -117,7 +117,7 @@ Persistir en MySQL la información de misioneros extraída de los archivos XLSX 
   - Añadir métricas (registros insertados, ignorados, duración por lote) al logging estructurado.
 - **Día 7**
   - Gestionar tokens/estado de ejecución y pruebas unitarias de normalización y deduplicación.
-  - Diseñar endpoint permanente `/extraccion_generacion` y asegurar que el flujo automático quede condicionado a la finalización de Fase 3.
+  - Diseñar endpoint permanente `/extraccion_generacion`; la orquestación automática con la Fase 3 se documenta como actividad diferida para la fase siguiente (ℹ️ pendiente de implementación).
 
 ### Semana 11 – Pruebas y Optimización
 - **Día 8**
