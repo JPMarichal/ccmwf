@@ -3,14 +3,17 @@ Email Service - Fase 1 del Proyecto CCM
 Servicio para recepción y procesamiento de correos de misioneros
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
 from contextlib import asynccontextmanager
 
+from pydantic import BaseModel, Field
+
 from app.config import get_settings
 from app.services.email_service import EmailService
 from app.services.drive_service import DriveService
+from app.services.database_sync_service import DatabaseSyncService
 
 # Configurar logger
 logger = structlog.get_logger()
@@ -18,11 +21,12 @@ logger = structlog.get_logger()
 # Estado global de la aplicación
 email_service = None
 drive_service = None
+database_sync_service = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Configuración del ciclo de vida de la aplicación"""
-    global email_service, drive_service
+    global email_service, drive_service, database_sync_service
 
     # Startup
     logger.info("🚀 Iniciando Email Service...")
@@ -30,6 +34,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
+    database_sync_service = DatabaseSyncService(settings, drive_service)
 
     # Test de conexión durante startup
     try:
@@ -64,6 +69,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class DatabaseSyncRequest(BaseModel):
+    fecha_generacion: str = Field(..., description="Fecha de generación en formato YYYYMMDD")
+    drive_folder_id: str = Field(..., description="ID de la carpeta en Google Drive donde están los XLSX")
+    force: bool = Field(False, description="Forzar reproceso incluso si hay estado previo")
+
+
+class DatabaseSyncResponse(BaseModel):
+    success: bool
+    report: dict
 
 @app.get("/")
 async def root():
@@ -122,6 +138,31 @@ async def search_emails(query: str = None):
     except Exception as e:
         logger.error("Error buscando emails", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error buscando emails: {str(e)}")
+
+
+@app.post("/extraccion_generacion", response_model=DatabaseSyncResponse)
+def extraccion_generacion(payload: DatabaseSyncRequest):
+    """Sincronizar una generación desde Google Drive hacia MySQL."""
+
+    if not database_sync_service:
+        raise HTTPException(status_code=500, detail="Database sync service no inicializado")
+
+    try:
+        report = database_sync_service.sync_generation(
+            fecha_generacion=payload.fecha_generacion,
+            drive_folder_id=payload.drive_folder_id,
+            force=payload.force,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "Error en extracción de generación",
+            error=str(exc),
+            fecha_generacion=payload.fecha_generacion,
+            drive_folder_id=payload.drive_folder_id,
+        )
+        raise HTTPException(status_code=500, detail=f"Error procesando extracción: {exc}")
+
+    return DatabaseSyncResponse(success=True, report=report.to_dict())
 
 if __name__ == "__main__":
     import uvicorn
