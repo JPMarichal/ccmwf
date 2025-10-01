@@ -44,7 +44,7 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 
 ### Semana 9 – Pruebas y Documentación
 - **Día 10**
-  - ℹ️ Pruebas unitarias y de integración con mocks de Drive. *(Avance: `pytest src/tests/test_drive_service.py` valida sanitización y nombres únicos en Drive; faltan escenarios de cuota y duplicados masivos)*
+  - ✅ Pruebas unitarias y de integración con mocks de Drive. *(Ejecutadas: `pytest src/tests/test_drive_service.py` cubre sanitización, nombres únicos, manejo de cuota (`HttpError` 403) y duplicados masivos con sufijos de timestamp)*
 - **Día 11**
   - ⚠️ Documentar proceso (guías, API docs) y checklist de subida. *(Progreso: `docs/api_documentation.md` actualizado con campos Drive)*
 - **Día 12**
