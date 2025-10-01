@@ -57,13 +57,22 @@ graph TD
 - **Renombrado de archivos**: Prefijo con fecha de generación + número de distrito
   - Ejemplo: `20250922_14A.pdf`
 
-### 3. Procesamiento de Datos
+- **Servicio de sincronización (`DatabaseSyncService`)**
+  - `DriveService.list_folder_files()` localiza archivos XLSX por `drive_folder_id`.
+  - `DriveService.download_file()` descarga cada archivo para su procesamiento.
+  - Cada fila del XLSX se normaliza con `MissionaryRecord` (fechas, booleanos, textos).
+  - Inserciones en MySQL se realizan en lotes de 50 con `sqlalchemy`/`pymysql`, usando commits por lote y rollback ante errores.
+  - Se mantienen tokens de reanudación en `data/state/database_sync_state.json` para retomar si ocurre un fallo (ℹ️ el encadenamiento automático con Fase 3 se pospone a una fase futura).
+  - Logs estructurados en español registran `message_id`, `etapa`, `drive_folder_id`, `excel_file_id`, `records_processed`, `records_skipped`, `table_errors`, `error_code`.
+
 ```mermaid
 graph TD
-    A[Archivos XLSX] --> B[Lectura y Parsing]
-    B --> C[Mapeo de Datos]
-    C --> D[Inserción en MySQL]
-    D --> E[Generación de Reportes]
+    A[Archivos XLSX en Drive] --> B[DatabaseSyncService.list_folder_files()]
+    B --> C[DatabaseSyncService.download_file()]
+    C --> D[MissionaryRecord.from_row()]
+    D --> E[Inserciones en lote MySQL]
+    E --> F[DatabaseSyncReport]
+    F --> G[Generación de Reportes]
 ```
 
 **Mapeo de Datos**:
@@ -129,7 +138,7 @@ sequenceDiagram
 
     S->>E: Envía correo con datos de misioneros
     E->>G: Sube y organiza archivos
-    G->>D: Procesa e inserta datos en MySQL
+    G->>/extraccion_generacion: Dispara sincronización (manual/pendiente de automatizar ℹ️)
     D->>R: Datos disponibles para reportes
     R->>T: Envía reporte por Telegram
     R->>M: Envía reporte por email
