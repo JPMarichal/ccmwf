@@ -19,7 +19,8 @@ ccmwf/
 │   │   ├── models.py          # Modelos Pydantic
 │   │   └── services/
 │   │       ├── email_service.py
-│   │       └── gmail_oauth_service.py
+│   │       ├── gmail_oauth_service.py
+│   │       └── database_sync_service.py
 │   ├── tests/                 # Tests unitarios e integración
 │   ├── docker/                # Dockerfile y docker-compose.yml
 │   └── requirements.txt
@@ -55,12 +56,20 @@ docker-compose up --build
 ```bash
 # Tests unitarios
 python -m pytest tests/test_email_service.py -q
+python -m pytest tests/test_database_sync_service.py -q
 
 # Tests de integración
 python -m pytest tests/test_integration_flow.py -q
 
 # Todos los tests con coverage
 python -m pytest tests/ --cov=app --cov-report=term-missing
+```
+
+**ℹ️ Nota**: Para los tests de Fase 4 se requiere ejecutar `pytest` con el directorio `src/` en el `PYTHONPATH`. Puedes exportarlo antes de correr pruebas:
+
+```powershell
+$env:PYTHONPATH="D:/myapps/ccmwf/src"
+python -m pytest src/tests/test_database_sync_service.py -vv
 ```
 
 ## Flujo de Trabajo Recomendado
@@ -85,6 +94,17 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
 - Documentación actualizada (`docs/plan_fase1.md`, `docs/api_documentation.md`, `docs/environment_variables.md`).
 - `.env` y credenciales fuera de control de versiones.
 
+## Fase 4 - Sincronización MySQL (Resumen operativo)
+
+- **Servicios clave**:
+  - `DatabaseSyncService` (`app/services/database_sync_service.py`) controla la sincronización y mantiene tokens de continuación en `data/state/database_sync_state.json`.
+  - `DriveService.list_folder_files()` y `DriveService.download_file()` facilitan la lectura de XLSX desde Google Drive.
+- **Endpoint permanente**: `POST /extraccion_generacion` (ver `app/main.py`, documentado en `docs/api_documentation.md`).
+- **Logs estructurados**: Todos los mensajes emiten claves `message_id`, `etapa`, `drive_folder_id`, `excel_file_id`, `records_processed`, `records_skipped`, `table_errors`, `error_code`.
+- **Pruebas**: `tests/test_database_sync_service.py` cubre normalización y persistencia; utiliza mocks de Drive y SQLAlchemy.
+
+**ℹ️ Flujo integrado**: Tras Fase 3, cuando el correo se marca como leído y los archivos se suben a Drive, se debe invocar `/extraccion_generacion` para persistir los datos en MySQL.
+
 ## Handoff: Pasos recomendados
 
 1. **Verificar cobertura**: `python -m pytest tests/ --cov=app --cov-report=term-missing`. Tomar nota del porcentaje actual (objetivo ≥80 %).
@@ -93,7 +113,7 @@ python -m pytest tests/ --cov=app --cov-report=term-missing
    - `python -m pytest tests/test_email_service.py -q`
    - `python -m pytest tests/test_integration_flow.py -q`
 4. **Validar estructura de correos**: Asegurar que los campos `validation_errors` sean vacíos en correos válidos y contengan códigos (`subject_pattern_mismatch`, `attachments_missing`, etc.) cuando la estructura falle.
-5. **Actualizar documentación**: Confirmar que `docs/api_documentation.md` y `docs/environment_variables.md` reflejen cualquier cambio de contratos o variables.
+5. **Actualizar documentación**: Confirmar que `docs/api_documentation.md`, `docs/development_guide.md` y `docs/environment_variables.md` reflejen cualquier cambio de contratos o variables (Fase 4 ✅ documentada).
 6. **Respaldo de configuraciones**: Guardar `.env`, `credentials.json` y `token.pickle` en ubicación segura (no versionada) antes de transferir.
 7. **Checklist final**: Documentar en `docs/plan_fase1.md` el estado final (cobertura alcanzada, tareas pendientes y recomendaciones para la siguiente fase).
 

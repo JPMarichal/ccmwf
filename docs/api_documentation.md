@@ -163,7 +163,79 @@ Cuando uno o más correos no cumplen la estructura esperada, el resultado incluy
 - **`rows`**: Filas de datos mapeadas a los encabezados; las celdas faltantes se completan con cadenas vacías para garantizar consistencia.
 - **`extra_texts`**: Texto contextual localizado antes de los encabezados (por ejemplo, títulos como "Generación del ..."), reutilizado para extraer `fecha_generacion` cuando el cuerpo no la incluye.
 
-### 3. Search Emails (Debug/Test)
+### 3. Extracción y sincronización de generación (Fase 4)
+
+- **Method**: `POST`
+- **Path**: `/extraccion_generacion`
+- **Purpose**: Ejecutar la sincronización de una generación específica tomando los archivos XLSX almacenados en Google Drive y persistiendo los registros nuevos en MySQL.
+- **Request Body**:
+
+```json
+{
+  "fecha_generacion": "20250110",
+  "drive_folder_id": "1ned3xG0oC-SgCUeLXSBADD8PQWV5drVs",
+  "force": false
+}
+```
+
+  - `fecha_generacion` (**string, requerido**): Identificador de la generación (formato `YYYYMMDD`).
+  - `drive_folder_id` (**string, requerido**): Carpeta raíz en Google Drive donde se encuentran los XLSX de la generación.
+  - `force` (**boolean, opcional**): Forzar reproceso ignorando el estado previo (tokens de continuación). Por defecto `false`.
+
+- **Behavior**:
+  - Lista los archivos XLSX en `drive_folder_id` usando `DriveService.list_folder_files()`.
+  - Descarga cada archivo con `DriveService.download_file()`.
+  - Convierte el contenido a `MissionaryRecord` aplicando normalizadores equivalentes a `normalizarFecha*` y `normalizarBooleano`.
+  - Inserta solamente registros nuevos (detección por `id`) usando `sqlalchemy` + `pymysql` y lotes de 50.
+  - Actualiza tokens de continuación en `data/state/database_sync_state.json` para reanudar en caso de fallo.
+  - Emite logs estructurados en español con claves mínimas: `message_id`, `etapa`, `drive_folder_id`, `excel_file_id`, `batch_size`, `records_processed`, `records_skipped`, `table_errors`, `error_code`.
+
+- **Success Response** (`HTTP 200`):
+
+```json
+{
+  "success": true,
+  "report": {
+    "fecha_generacion": "20250110",
+    "drive_folder_id": "1ned3xG0oC-SgCUeLXSBADD8PQWV5drVs",
+    "processed_files": [
+      {
+        "file_id": "1abcXYZ",
+        "filename": "20250110_distrito14A.xlsx",
+        "inserted": 45,
+        "skipped": 0,
+        "rows_total": 45
+      }
+    ],
+    "inserted_count": 45,
+    "skipped_count": 0,
+    "errors": [],
+    "duration_seconds": 12.4,
+    "continuation_token": null
+  }
+}
+```
+
+- **Error Response** (`HTTP 500`):
+
+```json
+{
+  "detail": "Error procesando extracción: db_insert_failed (1049: Unknown database)"
+}
+```
+
+- **Errores comunes**:
+  - `drive_listing_failed`: Problema al listar la carpeta (permisos o ID incorrecto).
+  - `drive_download_failed`: Descarga interrumpida; la respuesta incluirá `continuation_token` con el `file_id` para reintentar.
+  - `db_insert_failed`: Error de conexión o bloqueo MySQL; la sincronización se detiene y guarda estado para reanudar.
+  - `excel_read_failed`: Formato de XLSX inválido o dañado.
+
+- **Notas de operación**:
+  - Requiere que Fase 3 haya colocado los archivos XLSX en la carpeta indicada.
+  - Para ejecución automática, se invoca inmediatamente después de marcar el correo como leído y subir adjuntos en Drive.
+  - Mantener `force=false` en escenarios normales para evitar reprocesos innecesarios.
+
+### 4. Search Emails (Debug/Test)
 
 - **Method**: `GET`
 - **Path**: `/emails/search`
