@@ -8,6 +8,8 @@ import pytest
 from googleapiclient.errors import HttpError
 
 from app.config import Settings
+from app.services.email_html_parser import extract_primary_table
+from app.services.email_content_utils import extract_fecha_generacion, collect_table_texts
 from app.services.gmail_oauth_service import GmailOAuthService
 
 
@@ -71,6 +73,26 @@ def _default_message_payload() -> dict:
     }
 
 
+def _table_with_generation_title(date_text: str) -> str:
+    return f"""
+        <html>
+          <body>
+            <table>
+              <tr><td><b>{date_text}</b></td></tr>
+              <tr>
+                <td><b>Distrito</b></td>
+                <td><b>Zona</b></td>
+              </tr>
+              <tr>
+                <td>F</td>
+                <td>Centro</td>
+              </tr>
+            </table>
+          </body>
+        </html>
+    """
+
+
 def _setup_service(settings: Settings, drive_service: Mock | None = None) -> GmailOAuthService:
     service = GmailOAuthService(settings, drive_service=drive_service)
     service.authenticate = AsyncMock(return_value=True)
@@ -116,6 +138,40 @@ async def test_process_incoming_emails_success():
     assert detail["drive_upload_errors"] == []
     messages.modify.assert_any_call(userId="me", id="msg1", body={"removeLabelIds": ["UNREAD"]})
     messages.modify.assert_any_call(userId="me", id="msg1", body={"addLabelIds": ["lbl123"]})
+
+
+@pytest.mark.asyncio
+async def test_process_incoming_emails_extracts_fecha_from_table_title():
+    settings = _build_settings()
+    service = _setup_service(settings)
+    gmail_service, messages, labels = _mock_chain()
+
+    payload = _default_message_payload()
+    payload["payload"]["parts"][0]["body"]["data"] = _encode_body("Contenido sin fecha en cuerpo")
+    payload["payload"]["parts"][1]["body"]["data"] = _encode_body(
+        _table_with_generation_title("Generación del 22 de septiembre de 2025")
+    )
+
+    messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
+    messages.get.return_value.execute.return_value = payload
+    attachments = messages.attachments.return_value
+    attachments.get.return_value.execute.return_value = {"data": _encode_body("PDFDATA")}
+
+    labels.create.return_value.execute.return_value = {"id": "lbl123"}
+    messages.modify.return_value.execute.return_value = {}
+
+    service.gmail_service = gmail_service
+
+    result = await service.process_incoming_emails()
+
+    detail = result.details[0]
+    assert detail["success"] is True
+    assert detail["fecha_generacion"] == "20250922"
+    assert detail["validation_errors"] == []
+    assert detail["table_errors"] == []
+    assert detail["parsed_table"]["headers"] == ["Distrito", "Zona"]
+    assert detail["parsed_table"]["rows"][0]["Distrito"] == "F"
+    assert "extra_texts" in detail["parsed_table"]
 
 
 @pytest.mark.asyncio
@@ -275,6 +331,16 @@ async def test_process_incoming_emails_drive_missing_fecha_generacion():
 
     payload = _default_message_payload()
     payload["payload"]["parts"][0]["body"]["data"] = _encode_body("Mensaje sin fecha")
+    payload["payload"]["parts"][1]["body"]["data"] = _encode_body(
+        """
+        <html><body>
+          <table>
+            <tr><th>Distrito</th><th>Zona</th></tr>
+            <tr><td>15C</td><td>Este</td></tr>
+          </table>
+        </body></html>
+        """
+    )
 
     messages.list.return_value.execute.return_value = {"messages": [{"id": "msg1"}]}
     messages.get.return_value.execute.return_value = payload
@@ -407,9 +473,25 @@ def test_get_attachment_data_error_returns_none():
 
 
 def test_extract_fecha_generacion_cases():
-    service = GmailOAuthService(_build_settings())
-    assert service._extract_fecha_generacion("Mensaje sin fecha") is None
-    assert service._extract_fecha_generacion("Generación del 5 de marzo de 2024") == "20240305"
+    parsed_table, _ = extract_primary_table(
+        _table_with_generation_title("Generación del 5 de marzo de 2024")
+    )
+
+    assert extract_fecha_generacion(
+        None,
+        "Mensaje sin fecha",
+        subject="Correo sin información",
+        table_texts=[],
+    ) is None
+
+    assert extract_fecha_generacion(None, "Generación del 5 de marzo de 2024") == "20240305"
+
+    assert extract_fecha_generacion(
+        None,
+        "Cuerpo sin fecha",
+        subject="Asunto sin fecha",
+        table_texts=collect_table_texts(parsed_table),
+    ) == "20240305"
 
 
 def test_get_header_value_missing():
