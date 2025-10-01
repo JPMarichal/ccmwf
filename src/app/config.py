@@ -48,6 +48,11 @@ class Settings(BaseSettings):
 
     # Database Configuration (para futuras fases)
     database_url: Optional[str] = None
+    db_host: Optional[str] = None
+    db_port: int = 3306
+    db_user: Optional[str] = None
+    db_password: Optional[str] = None
+    db_name: Optional[str] = None
 
     # Security
     secret_key: str = "change-this-secret-key-in-production"
