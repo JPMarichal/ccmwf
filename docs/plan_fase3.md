@@ -32,7 +32,7 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 - **Día 3**
   - ✅ Diseñar módulos/servicios para subida a Drive (interfaz y dependencias). *(Definido en `app/services/drive_service.py`)*
 - **Día 4**
-  - ℹ️ Plan de pruebas: casos de éxito, errores de quota, archivos duplicados, limpieza temporal. *(Plan documentado; ejecución programada para Semana 9)*
+  - ✅ Plan de pruebas: casos de éxito, errores de quota, archivos duplicados, limpieza temporal. *(Plan ejecutado en Semana 9 con `pytest src/tests/test_drive_service.py` → sanitización, duplicados y cuota; limpieza temporal integrada en checklist `docs/drive_upload_checklist.md`)*
 
 ### Semana 8 – Implementación (iniciada)
 - **Día 5-6**
@@ -46,9 +46,9 @@ Organizar y almacenar en Google Drive la información procesada en fases anterio
 - **Día 10**
   - ✅ Pruebas unitarias y de integración con mocks de Drive. *(Ejecutadas: `pytest src/tests/test_drive_service.py` cubre sanitización, nombres únicos, manejo de cuota (`HttpError` 403) y duplicados masivos con sufijos de timestamp)*
 - **Día 11**
-  - ⚠️ Documentar proceso (guías, API docs) y checklist de subida. *(Progreso: `docs/api_documentation.md` actualizado con campos Drive)*
+  - ✅ Documentar proceso (guías, API docs) y checklist de subida. *(Nuevo: `docs/drive_upload_checklist.md` resume pasos operativos; `docs/api_documentation.md` mantiene campos Drive actualizados)*
 - **Día 12**
-  - ⚠️ Revisión final, retroalimentación y preparación para persistencia (Fase 4).
+  - ✅ Revisión final, retroalimentación y preparación para persistencia (Fase 4). *(Checklist incluye campos a entregar a Fase 4 y manejo de errores `drive_upload_errors`)*
 
 ## Riesgos y Mitigaciones
 - **Cuotas de API**: Implementar reintentos con backoff y monitoreo de límites.
