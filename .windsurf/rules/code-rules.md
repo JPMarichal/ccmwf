@@ -4,7 +4,7 @@ trigger: always_on
 
 Si creas archivos temporales para pruebas rápidas, deberás crear el menor número posible, reutilizando mejor que crear innecesariamente, y deberás eliminarlos una vez pasada la prueba. No debe dejarse rastro de archivos o código innecesarios para el sistema y para el objetivo del proyecto. Sobre todo, dichos archivos no deben publicarse en git.
 
-Las credenciales, datos de entorno, etc, están en .env y deben ser utilizadas desde allí. La intención es prescindir de config.js, por lo que .env es la fuente de verdad y config.js una referencia histórica.
+Las credenciales, datos de entorno, etc, están en .env y deben ser utilizadas desde allí. La intención es prescindir de config.js, por lo que .env es la fuente de verdad y config.js una referencia histórica. Todos los servicios de Google deben reutilizar la autorización oAuth existente.
 
 Antes de introducir nueva funcionalidad, confirma que las variables necesarias existen en .env; si hace falta una nueva, agrégala allí primero, nunca en el código fuente.
 
