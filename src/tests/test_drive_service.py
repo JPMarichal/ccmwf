@@ -69,3 +69,13 @@ def test_generate_unique_filename_appends_timestamp(monkeypatch, drive_service):
 
     assert name.startswith("20250110_Distrito_doc_20250102030405")
     assert len(name) <= drive_service.MAX_FILENAME_LENGTH
+
+
+def test_set_oauth_credentials_resets_client(drive_service):
+    dummy_creds = SimpleNamespace(valid=True, expired=False)
+    drive_service._service = MagicMock()
+
+    drive_service.set_oauth_credentials(dummy_creds)
+
+    assert drive_service._oauth_credentials == dummy_creds
+    assert drive_service._service is None
