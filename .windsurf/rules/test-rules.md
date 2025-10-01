@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # 📌 Instrucciones para generación de pruebas con pytest
 
 ## 🔹 Estándares generales
