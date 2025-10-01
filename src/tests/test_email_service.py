@@ -17,6 +17,8 @@ from app.main import app
 from app.config import Settings
 from app.models import EmailAttachment, ProcessingResult
 from app.services.email_service import EmailService
+from app.services.email_html_parser import extract_primary_table
+from app.services.email_content_utils import extract_fecha_generacion, collect_table_texts
 from app.services.validators import validate_email_structure
 
 
@@ -115,14 +117,29 @@ class TestEmailService:
         assert service.use_oauth is True
 
     def test_extract_fecha_generacion(self, email_service):
-        body = "Generación del 15 de enero de 2025"
-        fecha = email_service._extract_fecha_generacion(body)
+        parsed_table, _ = extract_primary_table(
+            """
+            <table>
+              <tr><td>Generación del 15 de enero de 2025</td></tr>
+            </table>
+            """
+        )
+        fecha = extract_fecha_generacion(
+            None,
+            "Generación del 15 de enero de 2025",
+            subject="Misioneros que llegan el 15 de enero",
+            table_texts=collect_table_texts(parsed_table),
+        )
 
         assert fecha == "20250115"
 
     def test_extract_fecha_no_encontrada(self, email_service):
-        body = "Email sin fecha específica"
-        fecha = email_service._extract_fecha_generacion(body)
+        fecha = extract_fecha_generacion(
+            None,
+            "Email sin fecha específica",
+            subject="Correo irrelevante",
+            table_texts=[],
+        )
 
         assert fecha is None
 
