@@ -97,3 +97,6 @@ yarn-error.log*
 attachments/
 temp/
 tmp/
+
+# Token pickle
+src/token.pickle
