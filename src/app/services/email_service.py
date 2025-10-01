@@ -7,7 +7,6 @@ import email
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import decode_header
-import re
 from typing import List, Dict, Optional, Tuple
 import structlog
 from datetime import datetime
@@ -18,6 +17,10 @@ from app.models import EmailMessage, EmailAttachment, ProcessingResult, EmailSta
 from app.services.gmail_oauth_service import GmailOAuthService
 from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
+from app.services.email_content_utils import (
+    extract_fecha_generacion,
+    collect_table_texts,
+)
 from app.services.drive_service import DriveService
 
 
@@ -226,8 +229,16 @@ class EmailService:
             body = self._get_email_body(email_message)
             html_body = self._get_email_html(email_message)
 
-            # Buscar fecha de generación en el cuerpo
-            fecha_generacion = self._extract_fecha_generacion(body)
+            parsed_table, parse_errors = extract_primary_table(html_body or "")
+            table_texts = collect_table_texts(parsed_table)
+
+            fecha_generacion = extract_fecha_generacion(
+                self.logger,
+                body,
+                html_body,
+                subject,
+                table_texts,
+            )
 
             # Obtener attachments
             attachments = []
@@ -262,7 +273,7 @@ class EmailService:
                 except:
                     pass  # Ignorar errores de etiquetado
 
-            parsed_table, table_errors = extract_primary_table(html_body or "")
+            table_errors = list(parse_errors)
             table_errors.extend(
                 validate_table_structure(
                     parsed_table,
@@ -433,36 +444,6 @@ class EmailService:
                     html_content.append(payload.decode(charset, errors='ignore'))
 
         return "\n".join(html_content).strip()
-
-    def _extract_fecha_generacion(self, body: str) -> Optional[str]:
-        """Extraer fecha de generación del cuerpo del email"""
-        # Patrón para "Generación del DD de MES de YYYY"
-        pattern = r'Generación del (\d{1,2}) de (\w+) de (\d{4})'
-
-        match = re.search(pattern, body, re.IGNORECASE)
-
-        if match:
-            dia = match.group(1).zfill(2)
-            mes_texto = match.group(2).lower()
-            año = match.group(3)
-
-            # Mapeo de meses
-            meses = {
-                'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
-                'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
-                'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
-            }
-
-            mes = meses.get(mes_texto)
-            if mes:
-                fecha_formateada = f"{año}{mes}{dia}"
-                self.logger.info("📅 Fecha de generación extraída",
-                               fecha_original=match.group(0),
-                               fecha_formateada=fecha_formateada)
-                return fecha_formateada
-
-        self.logger.warning("⚠️ No se pudo extraer fecha de generación", body_preview=body[:100])
-        return None
 
     async def search_emails(self, query: Optional[str] = None) -> List[Dict]:
         """Buscar emails (para testing y debugging)"""
