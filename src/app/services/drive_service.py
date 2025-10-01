@@ -5,7 +5,7 @@ import os
 import re
 import pickle
 from datetime import datetime
-from typing import Dict, Optional, List, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Optional, List, Tuple, TYPE_CHECKING
 
 import structlog
 from google.auth.transport.requests import Request
@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 from app.config import Settings
 
@@ -234,6 +234,94 @@ class DriveService:
             parent_folder_id=parent_folder_id,
         )
         return drive_file
+
+    def list_folder_files(
+        self,
+        folder_id: str,
+        *,
+        mime_types: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Listar archivos dentro de una carpeta específica de Drive."""
+
+        if not folder_id:
+            raise ValueError("Se requiere el ID de la carpeta para listar archivos")
+
+        self._ensure_service()
+
+        query_parts = [f"'{folder_id}' in parents", "trashed = false"]
+        if mime_types:
+            mime_filters = " or ".join([f"mimeType = '{mime}'" for mime in mime_types])
+            query_parts.append(f"({mime_filters})")
+
+        query = " and ".join(query_parts)
+        files_service = self._service.files()
+        page_token = None
+        files: List[Dict[str, Any]] = []
+
+        while True:
+            try:
+                response = files_service.list(
+                    q=query,
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime)",
+                    spaces="drive",
+                    pageToken=page_token,
+                ).execute()
+            except HttpError as exc:
+                self.logger.error(
+                    "❌ Error listando archivos en Drive",
+                    folder_id=folder_id,
+                    error=str(exc),
+                )
+                raise
+
+            files.extend(response.get("files", []))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+        self.logger.info(
+            "📄 Archivos listados en carpeta",
+            folder_id=folder_id,
+            total=len(files),
+        )
+        return files
+
+    def download_file(self, file_id: str) -> bytes:
+        """Descargar archivo binario desde Google Drive y devolver sus bytes."""
+
+        if not file_id:
+            raise ValueError("Se requiere el ID del archivo para descargarlo")
+
+        self._ensure_service()
+        request = self._service.files().get_media(fileId=file_id)
+
+        buffer = io.BytesIO()
+        downloader = MediaIoBaseDownload(buffer, request)
+
+        try:
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+                if status:
+                    self.logger.info(
+                        "⬇️ Descargando archivo de Drive",
+                        file_id=file_id,
+                        progress=f"{int(status.progress() * 100)}%",
+                    )
+        except HttpError as exc:
+            self.logger.error(
+                "❌ Error descargando archivo de Drive",
+                file_id=file_id,
+                error=str(exc),
+            )
+            raise
+
+        self.logger.info(
+            "✅ Archivo descargado correctamente",
+            file_id=file_id,
+            bytes=buffer.getbuffer().nbytes,
+        )
+        return buffer.getvalue()
 
     def upload_attachments(
         self,
