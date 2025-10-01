@@ -335,8 +335,8 @@ async def test_process_incoming_emails_drive_missing_fecha_generacion():
         """
         <html><body>
           <table>
-            <tr><th>Distrito</th><th>Zona</th></tr>
-            <tr><td>15C</td><td>Este</td></tr>
+            <tr><th>Distrito</th><th>Zona Horaria</th></tr>
+            <tr><td>15C</td><td>-2,-1,0 HORAS DE DIFERENCIA</td></tr>
           </table>
         </body></html>
         """
