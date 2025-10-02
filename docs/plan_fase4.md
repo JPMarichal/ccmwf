@@ -79,6 +79,12 @@ Persistir en MySQL la información de misioneros extraída de los archivos XLSX 
 - Repositorio local de estado (archivo JSON o tabla auxiliar) para tokens de continuación.
 - Tests unitarios y de integración con mocks de Drive y MySQL (`pytest`, `pytest-mock`).
 - Logs estructurados y documentación actualizada (`docs/api_documentation.md`, `docs/development_guide.md`).
+
+### Estado de logging (ℹ️ 2025-10-02)
+- **✅ Configuración separada por servicio**: `src/app/config.py` define handlers diarios para `application.log`, `email_service.log`, `drive_service.log` y `database_sync.log`, cumpliendo responsabilidad única.
+- **✅ Formato JSON**: Todos los logs utilizan `structlog` con `timestamp_utc` y campos comunes; se retiraron emojis de mensajes operativos.
+- **⚠️ Pruebas pendientes**: Falta instrumentar asserts en `tests/` para validar presencia de campos obligatorios (`message_id`, `etapa`, etc.) y rotación.
+- **ℹ️ Documentación**: `docs/logging.md` actualizado; `docs/development_guide.md` requiere reflejar la nueva estructura durante la siguiente fase de documentación.
 - Checklist de despliegue para base de datos y credenciales.
 - Endpoint permanente (`POST /extraccion_generacion`) para invocar la extracción y sincronización por generación, reutilizable para pruebas controladas y para la ejecución encadenada tras la fase 3.
 

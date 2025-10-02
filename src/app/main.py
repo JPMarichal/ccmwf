@@ -16,7 +16,7 @@ from app.services.drive_service import DriveService
 from app.services.database_sync_service import DatabaseSyncService
 
 # Configurar logger
-logger = structlog.get_logger()
+logger = structlog.get_logger("app").bind(servicio="app")
 
 # Estado global de la aplicación
 email_service = None
@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     configure_logging(settings)
 
     # Startup
-    logger.info("🚀 Iniciando Email Service...")
+    logger.info("Iniciando Email Service")
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
     database_sync_service = DatabaseSyncService(settings, drive_service)
@@ -40,15 +40,15 @@ async def lifespan(app: FastAPI):
     # Test de conexión durante startup
     try:
         await email_service.test_connection()
-        logger.info("✅ Conexión IMAP establecida correctamente")
+        logger.info("Conexión IMAP establecida correctamente")
     except Exception as e:
-        logger.error("❌ Error en conexión IMAP durante startup", error=str(e))
+        logger.error("Error en conexión IMAP durante startup", error=str(e))
         # No fallar el startup, solo loguear el error
 
     yield
 
     # Shutdown
-    logger.info("🛑 Cerrando Email Service...")
+    logger.info("Cerrando Email Service")
     if email_service:
         await email_service.close()
     if drive_service:

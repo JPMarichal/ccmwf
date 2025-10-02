@@ -43,7 +43,10 @@ class GmailOAuthService:
 
     def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
         self.settings = settings
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("email_service").bind(
+            servicio="email_service",
+            componente="gmail_oauth",
+        )
         self.credentials = None
         self.gmail_service = None
         self._authenticated = False

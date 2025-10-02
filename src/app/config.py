@@ -59,8 +59,8 @@ class Settings(BaseSettings):
 
     # Logging
     log_file_path: str = str(PROJECT_ROOT / "logs" / "email_service.log")
-    log_max_file_size: int = 100  # MB
-    log_backup_count: int = 5
+    log_max_file_size: int = 10  # MB (usado para validaciones puntuales)
+    log_backup_count: int = 30  # Equivalente a 30 días de retención cuando se rota diariamente
 
     # Development
     debug: bool = True
@@ -117,59 +117,141 @@ def get_settings() -> Settings:
 
 
 def configure_logging(settings: Settings):
-    """Configurar logging estructurado"""
+    """Configurar logging estructurado con separación por servicio."""
     import logging.config
 
     log_path = Path(settings.log_file_path)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_dir = log_path.parent
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "json": {
-                "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "json",
-                "stream": "ext://sys.stdout",
-            },
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "formatter": "json",
-                "filename": settings.log_file_path,
-                "maxBytes": settings.log_max_file_size * 1024 * 1024,
-                "backupCount": settings.log_backup_count,
-            },
-        },
-        "root": {
-            "handlers": ["console", "file"],
-            "level": settings.log_level,
-        },
+    service_log_paths = {
+        "app": log_dir / "application.log",
+        "email_service": log_path,
+        "drive_service": log_dir / "drive_service.log",
+        "database_sync": log_dir / "database_sync.log",
     }
 
-    logging.config.dictConfig(log_config)
+    for path in service_log_paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Configurar structlog
     structlog.contextvars.clear_contextvars()
     structlog.configure(
         processors=[
-            structlog.stdlib.filter_by_level,
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_logger_name,
             structlog.stdlib.add_log_level,
             structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.TimeStamper(fmt="iso", key="timestamp_utc"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer()
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter(
+                structlog.processors.JSONRenderer()
+            ),
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
+
+    formatter_name = "structlog_json"
+    foreign_pre_chain = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso", key="timestamp_utc"),
+    ]
+
+    log_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            formatter_name: {
+                "()": structlog.stdlib.ProcessorFormatter,
+                "processor": structlog.processors.JSONRenderer(),
+                "foreign_pre_chain": foreign_pre_chain,
+            },
+        },
+        "filters": {
+            "app_filter": {"()": "logging.Filter", "name": "app"},
+            "email_service_filter": {"()": "logging.Filter", "name": "email_service"},
+            "drive_service_filter": {"()": "logging.Filter", "name": "drive_service"},
+            "database_sync_filter": {"()": "logging.Filter", "name": "database_sync"},
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": formatter_name,
+                "stream": "ext://sys.stdout",
+            },
+            "app_file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "formatter": formatter_name,
+                "filename": str(service_log_paths["app"]),
+                "when": "midnight",
+                "backupCount": settings.log_backup_count,
+                "encoding": "utf-8",
+                "utc": True,
+                "filters": ["app_filter"],
+            },
+            "email_file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "formatter": formatter_name,
+                "filename": str(service_log_paths["email_service"]),
+                "when": "midnight",
+                "backupCount": settings.log_backup_count,
+                "encoding": "utf-8",
+                "utc": True,
+                "filters": ["email_service_filter"],
+            },
+            "drive_file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "formatter": formatter_name,
+                "filename": str(service_log_paths["drive_service"]),
+                "when": "midnight",
+                "backupCount": settings.log_backup_count,
+                "encoding": "utf-8",
+                "utc": True,
+                "filters": ["drive_service_filter"],
+            },
+            "database_file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "formatter": formatter_name,
+                "filename": str(service_log_paths["database_sync"]),
+                "when": "midnight",
+                "backupCount": settings.log_backup_count,
+                "encoding": "utf-8",
+                "utc": True,
+                "filters": ["database_sync_filter"],
+            },
+        },
+        "loggers": {
+            "app": {
+                "handlers": ["app_file"],
+                "level": settings.log_level,
+                "propagate": True,
+            },
+            "email_service": {
+                "handlers": ["email_file"],
+                "level": settings.log_level,
+                "propagate": True,
+            },
+            "drive_service": {
+                "handlers": ["drive_file"],
+                "level": settings.log_level,
+                "propagate": True,
+            },
+            "database_sync": {
+                "handlers": ["database_file"],
+                "level": settings.log_level,
+                "propagate": True,
+            },
+        },
+        "root": {
+            "handlers": ["console"],
+            "level": settings.log_level,
+        },
+    }
+
+    logging.config.dictConfig(log_config)

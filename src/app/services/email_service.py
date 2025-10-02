@@ -29,13 +29,17 @@ class EmailService:
 
     def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
         self.settings = settings
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("email_service").bind(
+            servicio="email_service",
+        )
         self.drive_service = drive_service
 
         # Detectar si usar OAuth o IMAP basado en configuración
         self.use_oauth = self._should_use_oauth()
-        self.logger.info("🔧 Inicializando servicio de email",
-                        authentication="OAuth" if self.use_oauth else "IMAP")
+        self.logger.info(
+            "Servicio de email inicializado",
+            authentication="OAuth" if self.use_oauth else "IMAP",
+        )
 
         if self.use_oauth:
             self.gmail_oauth_service = GmailOAuthService(settings, drive_service=drive_service)

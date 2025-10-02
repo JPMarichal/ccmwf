@@ -468,7 +468,9 @@ class DatabaseSyncService:
     ):
         self.settings = settings
         self.drive_service = drive_service
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("database_sync").bind(
+            servicio="database_sync",
+        )
         self.engine = engine or self._create_engine(settings)
         self.session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
         state_path = PROJECT_ROOT / "data" / "state" / "database_sync_state.json"

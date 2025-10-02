@@ -32,7 +32,9 @@ class DriveService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("drive_service").bind(
+            servicio="drive_service",
+        )
         self._service = None
         self._oauth_credentials: Optional[Credentials] = None
 
