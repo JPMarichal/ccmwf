@@ -63,6 +63,13 @@ Documentar las pautas generales de logging para todos los servicios de la aplica
 - **Rotación y retención**: El tope es 100 MB con cinco respaldos, sin rotación temporal ni retención explícita de 30 días.
 - **Trazabilidad actual**: Los mensajes incluyen emojis y cadenas libres; se requiere normalizar a JSON estructurado en español conforme a los lineamientos actualizados.
 
+## Ajustes diseñados (ℹ️ Etapa 2)
+- **Separación de handlers**: `src/app/config.py` creará `application.log`, `email_service.log`, `drive_service.log` y `database_sync.log` con `TimedRotatingFileHandler` diario (`backupCount=30`).
+- **Formato JSON puro**: Se usará `structlog.stdlib.ProcessorFormatter` con `JSONRenderer`; `timestamp_utc` será parte de cada entrada.
+- **Identificación de servicio**: Los servicios (`EmailService`, `DriveService`, `DatabaseSyncService`, `GmailOAuthService`) se inicializan con `structlog.get_logger("<servicio>")` y `bind(servicio=...)` para cumplir responsabilidad única.
+- **Console logging**: El handler raíz permanecerá en consola con el mismo formato JSON para trazabilidad en desarrollo.
+- **Próximos pasos**: Validar en la Etapa 3 que los logs incluyan campos obligatorios (ej. `message_id`, `etapa`) y eliminar emojis/iconografía no estructurada.
+
 ## Flujo de actualización
 1. Ajustar `logging-rules.md` si cambian los lineamientos globales.
 2. Actualizar planes de fase y documentación (`docs/plan_fase4.md`, `docs/development_guide.md`) con los cambios específicos.
