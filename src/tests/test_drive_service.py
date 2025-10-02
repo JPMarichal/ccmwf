@@ -49,7 +49,38 @@ def test_format_filename_sanitizes_components(drive_service):
 
 def test_format_filename_strips_gender_prefix_when_followed_by_digits(drive_service):
     result = drive_service.format_filename("20250110", "14A", "F_14A_doc.pdf")
-    assert result.startswith("20250110_14A_14A_doc.pdf")
+    assert result.startswith("20250110_14A_doc.pdf")
+
+
+def test_format_filename_avoids_duplicate_district_component(drive_service):
+    result = drive_service.format_filename("20250922", "Distrito_10C", "F_Distrito_10C.pdf")
+    assert result == "20250922_Distrito_10C.pdf"
+
+
+def test_format_filename_removes_prefixes_from_district_values(drive_service):
+    result = drive_service.format_filename("20250922", "F District 10C", "District 10C.pdf")
+    assert result == "20250922_District_10C.pdf"
+
+
+def test_guess_primary_district_strips_single_letter_prefixes():
+    parsed_table = {
+        "rows": [
+            {"Distrito": "F District 10C"},
+        ]
+    }
+
+    assert DriveService.guess_primary_district(parsed_table) == "District 10C"
+
+
+def test_guess_primary_district_ignores_rows_without_digits():
+    parsed_table = {
+        "rows": [
+            {"Distrito": "Prefijo F"},
+            {"Distrito": "District 7A"},
+        ]
+    }
+
+    assert DriveService.guess_primary_district(parsed_table) == "District 7A"
 
 
 def test_generate_unique_filename_returns_original_when_available(drive_service):

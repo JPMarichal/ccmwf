@@ -401,15 +401,39 @@ class DriveService:
         original_name: str,
     ) -> str:
         """Generar nombre consistente YYYYMMDD_Distrito_original.ext."""
+        logger = structlog.get_logger()
         sanitized_original = DriveService._sanitize_filename(original_name)
         sanitized_original = DriveService._strip_leading_gender_prefix(sanitized_original)
+        original_base, original_ext = os.path.splitext(sanitized_original)
         sanitized_district = DriveService._sanitize_component(distrito)
 
-        parts = [
-            part for part in [fecha_generacion, sanitized_district, sanitized_original]
-            if part
-        ]
-        combined = "_".join(parts) if parts else sanitized_original
+        components = [fecha_generacion]
+        if sanitized_district:
+            components.append(DriveService._strip_single_letter_component_prefix(sanitized_district))
+        if original_base:
+            components.append(DriveService._strip_single_letter_component_prefix(original_base))
+
+        components = [component for component in components if component]
+
+        if not components:
+            components.append("archivo")
+
+        combined = "_".join(components)
+        if original_ext:
+            combined = f"{combined}{original_ext}"
+
+        combined = DriveService._remove_duplicate_tokens(combined)
+        combined = DriveService._strip_leading_gender_prefix(combined)
+
+        logger.info(
+            "📁 Nombre de archivo normalizado para Drive",
+            fecha_generacion=fecha_generacion,
+            distrito_original=distrito,
+            distrito_normalizado=sanitized_district,
+            nombre_original=original_name,
+            nombre_sanitizado=sanitized_original,
+            nombre_final=combined,
+        )
         return DriveService._enforce_max_length(combined)
 
     @classmethod
@@ -429,20 +453,37 @@ class DriveService:
             return filename
 
         base, ext = os.path.splitext(filename)
-        match = re.match(r"^(?P<prefix>[FMfm])_(?P<rest>.+)", base)
-        if not match:
+        tokens = base.split("_")
+        if len(tokens) <= 1:
             return filename
 
-        remainder = match.group("rest")
+        index = 0
+        while index < len(tokens) and len(tokens[index]) == 1 and tokens[index].isalpha():
+            index += 1
+
+        if index == 0 or index >= len(tokens):
+            return filename
+
+        remainder_tokens = tokens[index:]
+        remainder = "_".join(remainder_tokens).strip("_")
         if not remainder:
-            return filename
-
-        # Solo remover cuando el resto comienza con dígito (ej. `F_14A` → `14A`).
-        if not remainder[0].isdigit():
             return filename
 
         cleaned = cls._enforce_max_length(f"{remainder}{ext}")
         return cleaned
+
+    @classmethod
+    def _strip_single_letter_component_prefix(cls, value: str) -> str:
+        if not value:
+            return value
+
+        tokens = value.split("_")
+        while tokens and len(tokens[0]) == 1 and tokens[0].isalpha():
+            tokens = tokens[1:]
+        if not tokens:
+            return ""
+        remainder = "_".join(tokens).strip("_")
+        return remainder or value
 
     @classmethod
     def _sanitize_component(cls, value: Optional[str]) -> str:
@@ -452,7 +493,34 @@ class DriveService:
         sanitized = re.sub(r"\s+", "_", sanitized)
         sanitized = sanitized.strip("_")
         sanitized = re.sub(r"__+", "_", sanitized)
+        sanitized = sanitized.strip("_")
+        sanitized = cls._strip_single_letter_component_prefix(sanitized)
+        if not sanitized:
+            return ""
         return cls._enforce_max_length(sanitized)
+
+    @staticmethod
+    def _remove_duplicate_tokens(filename: str) -> str:
+        base, ext = os.path.splitext(filename)
+        tokens = base.split("_")
+        seen = set()
+        ordered_tokens: List[str] = []
+
+        for token in tokens:
+            normalized = re.sub(r"[^a-z0-9]", "", token.lower())
+            if not normalized:
+                ordered_tokens.append(token)
+                continue
+            if len(normalized) == 1 and normalized.isalpha():
+                # Omit prefijos como "F" que no aportan información a nombres finales.
+                continue
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered_tokens.append(token)
+
+        cleaned_base = "_".join(filter(None, ordered_tokens)) or base
+        return f"{cleaned_base}{ext}"
 
     @classmethod
     def _enforce_max_length(cls, filename: str) -> str:
@@ -530,9 +598,42 @@ class DriveService:
                 if "distrito" in key.lower():
                     if isinstance(value, str) and value.strip():
                         candidate = value.strip()
-                        if re.search(r"\d", candidate):
-                            return candidate
+                        cleaned_candidate = DriveService._clean_district_candidate(candidate)
+                        logger = structlog.get_logger()
+                        logger.info(
+                            "📋 Evaluando distrito detectado en tabla",
+                            raw_candidate=candidate,
+                            cleaned_candidate=cleaned_candidate,
+                        )
+                        if cleaned_candidate and re.search(r"\d", cleaned_candidate):
+                            return cleaned_candidate
         return None
+
+    @staticmethod
+    def _clean_district_candidate(value: str) -> str:
+        """Depurar valores detectados en tablas (p. ej. `F District 10C`)."""
+
+        if not value:
+            return ""
+
+        cleaned = value.strip()
+
+        # Eliminar prefijos de una sola letra seguidos de separadores (F District, H-District, etc.).
+        while True:
+            match = re.match(r"^[A-Za-z](?:[\s_\-:]+)(.+)$", cleaned)
+            if not match:
+                break
+            cleaned = match.group(1).strip()
+
+        if cleaned != value:
+            logger = structlog.get_logger()
+            logger.info(
+                "🔍 Normalizando valor de distrito",
+                raw_value=value,
+                cleaned_value=cleaned,
+            )
+
+        return cleaned
 
     def close(self):
         """Liberar el cliente de Drive."""
