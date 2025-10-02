@@ -96,6 +96,7 @@ class Settings(BaseSettings):
             'google_drive_credentials_path',
             'google_drive_token_path',
             'google_sheets_credentials_path',
+            'log_file_path',
         ]
 
         for field_name in credential_fields:
