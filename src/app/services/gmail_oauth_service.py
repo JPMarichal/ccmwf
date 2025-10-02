@@ -20,6 +20,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from app.config import Settings
+from app.logging_utils import ensure_log_context, bind_log_context
 from app.models import EmailMessage, EmailAttachment, ProcessingResult
 from app.services.validators import validate_email_structure, validate_table_structure
 from app.services.email_html_parser import extract_primary_table
@@ -54,6 +55,9 @@ class GmailOAuthService:
 
     async def authenticate(self) -> bool:
         """Autenticar con Gmail usando OAuth 2.0"""
+        context = ensure_log_context(etapa="gmail_oauth")
+        logger = bind_log_context(self.logger, context)
+
         try:
             creds = None
 
@@ -65,10 +69,10 @@ class GmailOAuthService:
             # Si no hay credenciales válidas, hacer flow OAuth
             if not creds or not creds.valid:
                 if creds and creds.expired and creds.refresh_token:
-                    self.logger.info("🔄 Refrescando token de acceso...")
+                    logger.info("Refrescando token de acceso")
                     creds.refresh(Request())
                 else:
-                    self.logger.info("🔐 Iniciando flow OAuth...")
+                    logger.info("Iniciando flow OAuth")
                     creds = await self._oauth_flow()
 
                 # Guardar credenciales para futuras ejecuciones
@@ -82,16 +86,18 @@ class GmailOAuthService:
             if self.drive_service:
                 self.drive_service.set_oauth_credentials(creds)
 
-            self.logger.info("✅ Autenticación OAuth exitosa")
+            logger.info("Autenticación OAuth exitosa")
             return True
 
         except Exception as e:
             self._authenticated = False
-            self.logger.error("❌ Error en autenticación OAuth", error=str(e))
+            logger.error("Error en autenticación OAuth", error=str(e))
             return False
 
     async def _oauth_flow(self) -> Credentials:
         """Ejecutar flow OAuth 2.0"""
+        logger = bind_log_context(self.logger, ensure_log_context(etapa="gmail_oauth"))
+
         try:
             # Verificar que existe el archivo de credenciales
             if not os.path.exists(self.settings.google_application_credentials):
@@ -114,11 +120,13 @@ class GmailOAuthService:
             return creds
 
         except Exception as e:
-            self.logger.error("Error en flow OAuth", error=str(e))
+            logger.error("Error en flow OAuth", error=str(e))
             raise
 
     async def test_connection(self) -> bool:
         """Test de conexión a Gmail API"""
+        logger = bind_log_context(self.logger, ensure_log_context(etapa="gmail_api"))
+
         try:
             await self.authenticate()
 
@@ -129,17 +137,18 @@ class GmailOAuthService:
             profile = self.gmail_service.users().getProfile(userId='me').execute()
             email_address = profile.get('emailAddress', 'unknown')
 
-            self.logger.info("✅ Conexión Gmail API exitosa",
-                           email_address=email_address)
+            logger.info("Conexión Gmail API exitosa", email_address=email_address)
             return True
 
         except Exception as e:
-            self.logger.error("❌ Error en test de conexión Gmail API", error=str(e))
+            logger.error("Error en test de conexión Gmail API", error=str(e))
             return False
 
     async def process_incoming_emails(self) -> ProcessingResult:
         """Procesar correos de misioneros usando Gmail API"""
         start_time = datetime.now()
+        process_context = ensure_log_context(etapa="recepcion_correo")
+        process_logger = bind_log_context(self.logger, process_context)
 
         try:
             await self.authenticate()
@@ -155,136 +164,149 @@ class GmailOAuthService:
                     duration_seconds=(datetime.now() - start_time).total_seconds()
                 )
 
-            # Buscar mensajes no leídos con el patrón
             query = f'subject:"{self.settings.email_subject_pattern}" is:unread'
 
             try:
-                # Buscar mensajes
                 results = self.gmail_service.users().messages().list(
                     userId='me',
                     q=query,
-                    maxResults=50
+                    maxResults=50,
                 ).execute()
-
                 messages = results.get('messages', [])
 
-                if not messages:
-                    self.logger.info("ℹ️ No se encontraron correos nuevos")
-                    return ProcessingResult(
-                        success=True,
-                        processed=0,
-                        errors=0,
-                        details=[],
-                        start_time=start_time,
-                        end_time=datetime.now(),
-                        duration_seconds=(datetime.now() - start_time).total_seconds()
-                    )
-
-            except HttpError as e:
-                self.logger.error("Error buscando mensajes",
-                                error_code=e.resp.status,
-                                error_details=str(e))
+            except HttpError as exc:
+                process_logger.error(
+                    "Error buscando mensajes",
+                    error_code=exc.resp.status if exc.resp else None,
+                    error_details=str(exc),
+                )
                 return ProcessingResult(
                     success=False,
                     processed=0,
                     errors=1,
-                    details=[{"error": f"Gmail API error: {e}"}],
+                    details=[{"error": f"Gmail API error: {exc}"}],
                     start_time=start_time,
                     end_time=datetime.now(),
                     duration_seconds=(datetime.now() - start_time).total_seconds()
                 )
 
-            self.logger.info("📧 Procesando correos",
-                           count=len(messages))
+            if not messages:
+                process_logger.info("No se encontraron correos nuevos")
+                return ProcessingResult(
+                    success=True,
+                    processed=0,
+                    errors=0,
+                    details=[],
+                    start_time=start_time,
+                    end_time=datetime.now(),
+                    duration_seconds=(datetime.now() - start_time).total_seconds()
+                )
 
-            results = []
+            process_logger = bind_log_context(
+                process_logger,
+                ensure_log_context(process_context, total=len(messages)),
+            )
+            process_logger.info("Procesando correos")
+
+            results_list: List[Dict[str, Any]] = []
             processed_count = 0
             error_count = 0
 
-            for msg_data in messages:
-                try:
-                    msg_id = msg_data['id']
+            import asyncio
 
-                    # Obtener el mensaje completo
+            for msg_data in messages:
+                msg_id = msg_data.get('id')
+                message_context = ensure_log_context(process_context, message_id=msg_id)
+                message_logger = bind_log_context(self.logger, message_context)
+
+                try:
                     message = self.gmail_service.users().messages().get(
                         userId='me',
                         id=msg_id,
-                        format='full'
+                        format='full',
                     ).execute()
 
-                    # Procesar el mensaje
-                    result = await self._process_single_message(message, msg_id)
-                    results.append(result)
+                    result = await self._process_single_message(
+                        message,
+                        msg_id,
+                        base_context=message_context,
+                    )
+                    results_list.append(result)
 
                     if result['success']:
                         processed_count += 1
                     else:
                         error_count += 1
 
-                    # Pausa para evitar límites de API
-                    import asyncio
-                    await asyncio.sleep(0.5)
-
-                except Exception as e:
+                except Exception as exc:  # noqa: BLE001
                     error_count += 1
-                    self.logger.error("Error procesando mensaje individual",
-                                    message_id=msg_id, error=str(e))
-                    results.append({
+                    message_logger.error("Error procesando mensaje individual", error=str(exc))
+                    results_list.append({
                         'success': False,
-                        'error': str(e),
+                        'error': str(exc),
                         'message_id': msg_id,
                         'parsed_table': None,
-                        'table_errors': ['processing_exception']
+                        'table_errors': ['processing_exception'],
                     })
+
+                await asyncio.sleep(0.5)
 
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
 
-            self.logger.info("✅ Procesamiento completado",
-                           processed=processed_count,
-                           errors=error_count,
-                           duration_seconds=duration)
+            process_logger.info(
+                "Procesamiento completado",
+                processed=processed_count,
+                errors=error_count,
+                duration_seconds=duration,
+            )
 
             return ProcessingResult(
                 success=True,
                 processed=processed_count,
                 errors=error_count,
-                details=results,
+                details=results_list,
                 start_time=start_time,
                 end_time=end_time,
-                duration_seconds=duration
+                duration_seconds=duration,
             )
 
-        except Exception as e:
+        except Exception as exc:  # noqa: BLE001
             end_time = datetime.now()
-            self.logger.error("❌ Error en procesamiento general", error=str(e))
+            process_logger.error("Error en procesamiento general", error=str(exc))
 
             return ProcessingResult(
                 success=False,
                 processed=0,
                 errors=1,
-                details=[{'error': str(e)}],
+                details=[{'error': str(exc)}],
                 start_time=start_time,
                 end_time=end_time,
-                duration_seconds=(end_time - start_time).total_seconds()
+                duration_seconds=(end_time - start_time).total_seconds(),
             )
 
-    async def _process_single_message(self, message: Dict[str, Any], msg_id: str) -> Dict:
+    async def _process_single_message(
+        self,
+        message: Dict[str, Any],
+        msg_id: str,
+        *,
+        base_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
         """Procesar un mensaje individual usando Gmail API"""
+        message_context = ensure_log_context(base_context, etapa="recepcion_correo", message_id=msg_id)
+        logger = bind_log_context(self.logger, message_context)
+
         try:
-            # Extraer headers
             headers = message['payload']['headers']
             subject = self._get_header_value(headers, 'Subject')
             sender = self._get_header_value(headers, 'From')
             date_str = self._get_header_value(headers, 'Date')
 
-            # Parsear fecha
             try:
                 date = datetime.fromisoformat(date_str.replace('Z', '+00:00').replace('+0000', '+00:00'))
-            except:
+            except Exception:  # noqa: BLE001
                 date = datetime.now()
 
-            # Obtener cuerpo del mensaje
             body = self._get_message_body(message['payload'])
             html_body = self._get_html_body(message['payload'])
 
@@ -292,18 +314,17 @@ class GmailOAuthService:
             table_texts = collect_table_texts(parsed_table)
 
             fecha_generacion = extract_fecha_generacion(
-                self.logger,
+                logger,
                 body,
                 html_body,
                 subject,
                 table_texts,
             )
 
-            # Obtener attachments
-            attachments = []
+            attachments: List[EmailAttachment] = []
             if 'parts' in message['payload']:
                 for part in self._get_all_parts(message['payload']):
-                    if part.get('filename') and part['filename']:
+                    if part.get('filename'):
                         attachment_id = (
                             part.get('body', {}).get('attachmentId')
                             if isinstance(part.get('body'), dict)
@@ -317,11 +338,10 @@ class GmailOAuthService:
                                 filename=part['filename'],
                                 size=len(attachment_data),
                                 content_type=part.get('mimeType', ''),
-                                data=attachment_data
+                                data=attachment_data,
                             ))
 
-            # Marcar como leído y etiquetado una vez completada la extracción
-            await self._mark_message_processed(msg_id)
+            await self._mark_message_processed(msg_id, base_context=message_context)
 
             is_valid, validation_errors = validate_email_structure(
                 subject=subject,
@@ -356,10 +376,16 @@ class GmailOAuthService:
                 else:
                     distrito = DriveService.guess_primary_district(parsed_table)
                     try:
+                        drive_context = ensure_log_context(
+                            message_context,
+                            etapa="drive_upload",
+                            drive_folder_id=drive_folder_id,
+                        )
                         folder_id, uploaded, errors = self.drive_service.upload_attachments(
                             fecha_generacion,
                             attachments,
                             distrito,
+                            log_context=drive_context,
                         )
                         drive_folder_id = folder_id
                         if uploaded:
@@ -367,9 +393,8 @@ class GmailOAuthService:
                         if errors:
                             drive_upload_errors.extend(errors)
                     except Exception as exc:  # noqa: BLE001
-                        self.logger.error(
+                        bind_log_context(logger, drive_context).error(
                             "Error subiendo attachments a Drive",
-                            message_id=msg_id,
                             error=str(exc),
                         )
                         drive_upload_errors.append({
@@ -395,53 +420,57 @@ class GmailOAuthService:
             }
 
             if success:
-                self.logger.info("✅ Mensaje procesado correctamente",
-                               message_id=msg_id,
-                               subject=subject,
-                               attachments=len(attachments),
-                               table_headers=table_headers_count,
-                               table_rows=table_rows_count)
+                logger.info(
+                    "Mensaje procesado correctamente",
+                    subject=subject,
+                    attachments=len(attachments),
+                    table_headers=table_headers_count,
+                    table_rows=table_rows_count,
+                )
                 if drive_uploaded_files:
-                    self.logger.info("📤 Archivos subidos a Drive",
-                                     message_id=msg_id,
-                                     files=len(drive_uploaded_files),
-                                     drive_folder_id=drive_folder_id)
+                    bind_log_context(
+                        logger,
+                        ensure_log_context(message_context, etapa="drive_upload", drive_folder_id=drive_folder_id),
+                    ).info(
+                        "Archivos subidos a Drive",
+                        files=len(drive_uploaded_files),
+                    )
             else:
-                self.logger.warning("⚠️ Validación de estructura fallida",
-                                    message_id=msg_id,
-                                    errors=validation_errors,
-                                    table_errors=table_errors,
-                                    subject=subject)
+                logger.warning(
+                    "Validación de estructura fallida",
+                    errors=validation_errors,
+                    table_errors=table_errors,
+                    subject=subject,
+                )
 
             if table_errors:
-                self.logger.warning("⚠️ Problemas al parsear tabla HTML",
-                                    message_id=msg_id,
-                                    errors=table_errors)
+                logger.warning("Problemas al parsear tabla HTML", errors=table_errors)
             elif parsed_table:
-                self.logger.info("📊 Tabla HTML extraída",
-                                 message_id=msg_id,
-                                 headers=table_headers_count,
-                                 rows=table_rows_count)
+                logger.info(
+                    "Tabla HTML extraída",
+                    headers=table_headers_count,
+                    rows=table_rows_count,
+                )
 
             if drive_upload_errors:
-                self.logger.warning("⚠️ Errores al subir archivos a Drive",
-                                    message_id=msg_id,
-                                    errors=drive_upload_errors)
+                bind_log_context(
+                    logger,
+                    ensure_log_context(message_context, etapa="drive_upload", drive_folder_id=drive_folder_id),
+                ).warning("Errores al subir archivos a Drive", errors=drive_upload_errors)
 
             return result
 
-        except Exception as e:
-            self.logger.error("Error procesando mensaje individual",
-                            message_id=msg_id, error=str(e))
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error procesando mensaje individual", error=str(exc))
             return {
                 'success': False,
-                'error': str(e),
+                'error': str(exc),
                 'message_id': msg_id,
                 'parsed_table': None,
                 'table_errors': ['processing_exception'],
                 'drive_folder_id': None,
                 'drive_uploaded_files': [],
-                'drive_upload_errors': [{'code': 'drive_upload_failed', 'message': str(e)}],
+                'drive_upload_errors': [{'code': 'drive_upload_failed', 'message': str(exc)}],
             }
 
     def _get_header_value(self, headers: List[Dict], name: str) -> str:
@@ -523,8 +552,16 @@ class GmailOAuthService:
                             error=str(e))
             return None
 
-    async def _mark_message_processed(self, message_id: str):
+    async def _mark_message_processed(
+        self,
+        message_id: str,
+        *,
+        base_context: Optional[Dict[str, Any]] = None,
+    ):
         """Marcar mensaje como procesado"""
+        context = ensure_log_context(base_context, etapa="recepcion_correo", message_id=message_id)
+        logger = bind_log_context(self.logger, context)
+
         try:
             # Marcar como leído
             self.gmail_service.users().messages().modify(
@@ -570,14 +607,15 @@ class GmailOAuthService:
                     else:
                         raise
 
-            self.logger.info("✅ Mensaje marcado como procesado", message_id=message_id)
+            logger.info("Mensaje marcado como procesado")
 
         except Exception as e:
-            self.logger.error("Error marcando mensaje como procesado",
-                            message_id=message_id, error=str(e))
+            logger.error("Error marcando mensaje como procesado", error=str(e))
 
     async def search_emails(self, query: Optional[str] = None) -> List[Dict]:
         """Buscar emails usando Gmail API (para testing)"""
+        search_logger = bind_log_context(self.logger, ensure_log_context(etapa="gmail_search"))
+
         try:
             await self.authenticate()
 
@@ -621,25 +659,29 @@ class GmailOAuthService:
                         })
 
                     except Exception as e:
-                        self.logger.error("Error procesando email en búsqueda",
-                                        message_id=msg_id, error=str(e))
+                        bind_log_context(
+                            search_logger,
+                            ensure_log_context(etapa="gmail_search", message_id=msg_id),
+                        ).error("Error procesando email en búsqueda", error=str(e))
 
                 return emails
 
             except HttpError as e:
-                self.logger.error("Error en búsqueda Gmail API", error=str(e))
+                search_logger.error("Error en búsqueda Gmail API", error=str(e))
                 return []
 
         except Exception as e:
-            self.logger.error("Error en búsqueda de emails", error=str(e))
+            search_logger.error("Error en búsqueda de emails", error=str(e))
             return []
 
     async def close(self):
         """Cerrar conexión y limpiar recursos"""
+        logger = bind_log_context(self.logger, ensure_log_context(etapa="gmail_oauth"))
+
         try:
             self.gmail_service = None
             self.credentials = None
             self._authenticated = False
-            self.logger.info("🔌 Conexión Gmail API cerrada")
+            logger.info("Conexión Gmail API cerrada")
         except Exception as e:
-            self.logger.error("Error cerrando conexión Gmail API", error=str(e))
+            logger.error("Error cerrando conexión Gmail API", error=str(e))
