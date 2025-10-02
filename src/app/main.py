@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 
 from app.config import configure_logging, get_settings
+from app.logging_utils import ensure_log_context, bind_log_context
 from app.services.email_service import EmailService
 from app.services.drive_service import DriveService
 from app.services.database_sync_service import DatabaseSyncService
@@ -31,8 +32,10 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(settings)
 
-    # Startup
-    logger.info("Iniciando Email Service")
+    startup_context = ensure_log_context(etapa="startup")
+    startup_logger = bind_log_context(logger, startup_context)
+
+    startup_logger.info("Iniciando Email Service")
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
     database_sync_service = DatabaseSyncService(settings, drive_service)
@@ -40,15 +43,16 @@ async def lifespan(app: FastAPI):
     # Test de conexión durante startup
     try:
         await email_service.test_connection()
-        logger.info("Conexión IMAP establecida correctamente")
+        startup_logger.info("Conexión IMAP establecida correctamente")
     except Exception as e:
-        logger.error("Error en conexión IMAP durante startup", error=str(e))
+        startup_logger.error("Error en conexión IMAP durante startup", error=str(e))
         # No fallar el startup, solo loguear el error
 
     yield
 
     # Shutdown
-    logger.info("Cerrando Email Service")
+    shutdown_logger = bind_log_context(logger, ensure_log_context(etapa="shutdown"))
+    shutdown_logger.info("Cerrando Email Service")
     if email_service:
         await email_service.close()
     if drive_service:
@@ -117,7 +121,10 @@ async def process_emails():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error procesando emails", error=str(e))
+        bind_log_context(
+            logger,
+            ensure_log_context(etapa="process_emails"),
+        ).error("Error procesando emails", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error procesando emails: {str(e)}")
 
 @app.get("/emails/search")
@@ -137,7 +144,10 @@ async def search_emails(query: str = None):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error buscando emails", error=str(e))
+        bind_log_context(
+            logger,
+            ensure_log_context(etapa="search_emails"),
+        ).error("Error buscando emails", error=str(e))
         raise HTTPException(status_code=500, detail=f"Error buscando emails: {str(e)}")
 
 
@@ -148,6 +158,13 @@ def extraccion_generacion(payload: DatabaseSyncRequest):
     if not database_sync_service:
         raise HTTPException(status_code=500, detail="Database sync service no inicializado")
 
+    context = ensure_log_context(
+        etapa="extraccion_generacion",
+        fecha_generacion=payload.fecha_generacion,
+        drive_folder_id=payload.drive_folder_id,
+    )
+    endpoint_logger = bind_log_context(logger, context)
+
     try:
         report = database_sync_service.sync_generation(
             fecha_generacion=payload.fecha_generacion,
@@ -155,14 +172,16 @@ def extraccion_generacion(payload: DatabaseSyncRequest):
             force=payload.force,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.error(
+        endpoint_logger.error(
             "Error en extracción de generación",
             error=str(exc),
-            fecha_generacion=payload.fecha_generacion,
-            drive_folder_id=payload.drive_folder_id,
         )
         raise HTTPException(status_code=500, detail=f"Error procesando extracción: {exc}")
 
+    endpoint_logger.info(
+        "Extracción de generación completada",
+        force=payload.force,
+    )
     return DatabaseSyncResponse(success=True, report=report.to_dict())
 
 if __name__ == "__main__":
