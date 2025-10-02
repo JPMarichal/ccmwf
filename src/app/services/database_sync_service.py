@@ -35,6 +35,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import PROJECT_ROOT, Settings
+from app.logging_utils import ensure_log_context, bind_log_context
 from app.services.drive_service import DriveService
 
 
@@ -180,7 +181,7 @@ class MissionaryRecord(BaseModel):
             missionary_id_raw = row[0]
         except IndexError:
             logger.warning(
-                "⚠️ Fila sin datos suficientes",
+                "Fila sin datos suficientes",
                 etapa="normalizacion",
                 excel_file_id=excel_file_id,
                 row_index=row_index,
@@ -191,7 +192,7 @@ class MissionaryRecord(BaseModel):
 
         if missionary_id_raw in (None, "", float("nan")):
             logger.warning(
-                "⚠️ Fila ignorada por carecer de ID",
+                "Fila ignorada por carecer de ID",
                 etapa="normalizacion",
                 excel_file_id=excel_file_id,
                 row_index=row_index,
@@ -204,7 +205,7 @@ class MissionaryRecord(BaseModel):
             missionary_id = int(str(missionary_id_raw).strip())
         except (TypeError, ValueError):
             logger.warning(
-                "⚠️ ID inválido en fila",
+                "ID inválido en fila",
                 etapa="normalizacion",
                 excel_file_id=excel_file_id,
                 row_index=row_index,
@@ -261,7 +262,7 @@ class MissionaryRecord(BaseModel):
 
         if not registro.nombre_misionero:
             logger.warning(
-                "⚠️ Registro sin nombre, se continuará",
+                "Registro sin nombre, se continuará",
                 etapa="normalizacion",
                 excel_file_id=excel_file_id,
                 row_index=row_index,
@@ -497,18 +498,21 @@ class DatabaseSyncService:
         force: bool = False,
     ) -> DatabaseSyncReport:
         start_time = datetime.utcnow()
+        base_context = ensure_log_context(
+            etapa="inicio",
+            drive_folder_id=drive_folder_id,
+            fecha_generacion=fecha_generacion,
+        )
+        logger = bind_log_context(self.logger, base_context)
+
         report = DatabaseSyncReport(
             fecha_generacion=fecha_generacion,
             drive_folder_id=drive_folder_id,
         )
 
-        self.logger.info(
-            "🗂️ Iniciando sincronización de generación",
-            etapa="inicio",
-            fecha_generacion=fecha_generacion,
-            drive_folder_id=drive_folder_id,
+        logger.info(
+            "Iniciando sincronización de generación",
             force=force,
-            message_id=None,
         )
 
         state = self.state_repository.load(drive_folder_id)
@@ -519,16 +523,16 @@ class DatabaseSyncService:
             files = self.drive_service.list_folder_files(
                 drive_folder_id,
                 mime_types=EXCEL_MIME_TYPES,
+                log_context=ensure_log_context(base_context, etapa="drive_list"),
             )
         except Exception as exc:  # noqa: BLE001
-            self.logger.error(
-                "❌ Error listando archivos en Drive",
-                etapa="drive_list",
-                drive_folder_id=drive_folder_id,
+            bind_log_context(
+                self.logger,
+                ensure_log_context(base_context, etapa="drive_list"),
+            ).error(
+                "Error listando archivos en Drive",
                 error=str(exc),
                 error_code="drive_listing_failed",
-                table_errors=[],
-                message_id=None,
             )
             report.errors.append(
                 {
@@ -565,28 +569,27 @@ class DatabaseSyncService:
                 continue
 
             filename = file_meta.get("name", "archivo.xlsx")
-            self.logger.info(
-                "📥 Descargando archivo de generación",
+            download_context = ensure_log_context(
+                base_context,
                 etapa="descarga_excel",
-                drive_folder_id=drive_folder_id,
                 excel_file_id=file_id,
+            )
+            bind_log_context(self.logger, download_context).info(
+                "Descargando archivo de generación",
                 excel_filename=filename,
-                message_id=None,
             )
 
             try:
-                file_bytes = self.drive_service.download_file(file_id)
+                file_bytes = self.drive_service.download_file(
+                    file_id,
+                    log_context=download_context,
+                )
             except Exception as exc:  # noqa: BLE001
-                self.logger.error(
-                    "❌ Error descargando archivo desde Drive",
-                    etapa="descarga_excel",
-                    drive_folder_id=drive_folder_id,
-                    excel_file_id=file_id,
+                bind_log_context(self.logger, download_context).error(
+                    "Error descargando archivo desde Drive",
                     excel_filename=filename,
                     error=str(exc),
                     error_code="drive_download_failed",
-                    table_errors=[],
-                    message_id=None,
                 )
                 report.errors.append(
                     {
@@ -602,20 +605,20 @@ class DatabaseSyncService:
             records, parsing_errors = self._parse_excel_rows(
                 excel_bytes=file_bytes,
                 excel_file_id=file_id,
+                base_context=download_context,
             )
 
             if parsing_errors:
                 report.errors.extend(parsing_errors)
 
             if not records:
-                self.logger.info(
-                    "ℹ️ Archivo sin registros nuevos",
-                    etapa="parseo",
-                    drive_folder_id=drive_folder_id,
-                    excel_file_id=file_id,
+                bind_log_context(
+                    self.logger,
+                    ensure_log_context(download_context, etapa="parseo"),
+                ).info(
+                    "Archivo sin registros nuevos",
                     excel_filename=filename,
                     table_rows=0,
-                    message_id=None,
                 )
                 report.processed_files.append(
                     {
@@ -630,18 +633,19 @@ class DatabaseSyncService:
                 continue
 
             try:
-                inserted, skipped = self._persist_records(records)
+                inserted, skipped = self._persist_records(
+                    records,
+                    base_context=ensure_log_context(download_context, etapa="insercion_mysql"),
+                )
             except SQLAlchemyError as exc:
-                self.logger.error(
-                    "❌ Error insertando registros en MySQL",
-                    etapa="insercion_mysql",
-                    drive_folder_id=drive_folder_id,
-                    excel_file_id=file_id,
+                bind_log_context(
+                    self.logger,
+                    ensure_log_context(download_context, etapa="insercion_mysql"),
+                ).error(
+                    "Error insertando registros en MySQL",
                     excel_filename=filename,
                     error=str(exc),
                     error_code="db_insert_failed",
-                    table_errors=[],
-                    message_id=None,
                 )
                 report.errors.append(
                     {
@@ -657,17 +661,15 @@ class DatabaseSyncService:
             inserted_total += inserted
             skipped_total += skipped
 
-            self.logger.info(
-                "✅ Archivo procesado",
-                etapa="insercion_mysql",
-                drive_folder_id=drive_folder_id,
-                excel_file_id=file_id,
+            bind_log_context(
+                self.logger,
+                ensure_log_context(download_context, etapa="insercion_mysql"),
+            ).info(
+                "Archivo procesado",
                 excel_filename=filename,
                 records_processed=inserted,
                 records_skipped=skipped,
                 table_rows=len(records),
-                table_errors=[],
-                message_id=None,
             )
 
             report.processed_files.append(
@@ -690,21 +692,32 @@ class DatabaseSyncService:
         if not report.continuation_token:
             report.continuation_token = None
 
-        self.logger.info(
-            "🎉 Sincronización de generación finalizada",
-            etapa="fin",
-            drive_folder_id=drive_folder_id,
-            fecha_generacion=fecha_generacion,
+        bind_log_context(
+            self.logger,
+            ensure_log_context(base_context, etapa="fin"),
+        ).info(
+            "Sincronización de generación finalizada",
             inserted_count=inserted_total,
             skipped_count=skipped_total,
             duration_seconds=report.duration_seconds,
             continuation_token=report.continuation_token,
-            message_id=None,
         )
         return report
 
-    def _parse_excel_rows(self, *, excel_bytes: bytes, excel_file_id: str) -> (List[MissionaryRecord], List[Dict[str, Any]]):
+    def _parse_excel_rows(
+        self,
+        *,
+        excel_bytes: bytes,
+        excel_file_id: str,
+        base_context: Optional[Dict[str, Any]] = None,
+    ) -> (List[MissionaryRecord], List[Dict[str, Any]]):
         errors: List[Dict[str, Any]] = []
+        parse_context = ensure_log_context(
+            base_context,
+            etapa="parseo",
+            excel_file_id=excel_file_id,
+        )
+        logger = bind_log_context(self.logger, parse_context)
         workbook = None
         try:
             workbook = load_workbook(io.BytesIO(excel_bytes), read_only=True, data_only=True)
@@ -716,6 +729,7 @@ class DatabaseSyncService:
                     "file_id": excel_file_id,
                 }
             )
+            logger.error("Error abriendo archivo Excel", error=str(exc), error_code="excel_read_failed")
             return [], errors
 
         try:
@@ -733,9 +747,13 @@ class DatabaseSyncService:
         records: List[MissionaryRecord] = []
         for index, row in enumerate(rows[1:], start=2):
             row_values = list(row)
+            row_logger = bind_log_context(
+                logger,
+                ensure_log_context(parse_context, excel_file_id=excel_file_id, row_index=index),
+            )
             record = MissionaryRecord.from_row(
                 row_values,
-                logger=self.logger,
+                logger=row_logger,
                 excel_file_id=excel_file_id,
                 row_index=index,
             )
@@ -745,24 +763,37 @@ class DatabaseSyncService:
         workbook.close()
         return records, errors
 
-    def _persist_records(self, records: List[MissionaryRecord]) -> (int, int):
+    def _persist_records(
+        self,
+        records: List[MissionaryRecord],
+        *,
+        base_context: Optional[Dict[str, Any]] = None,
+    ) -> (int, int):
         if not records:
             return 0, 0
 
         record_ids = [record.id for record in records]
         timestamp = datetime.utcnow()
 
+        persist_logger = bind_log_context(self.logger, base_context)
+
         with self.session_factory() as session:
             existing_ids = self._fetch_existing_ids(session, record_ids)
             new_records = [r for r in records if r.id not in existing_ids]
 
             if not new_records:
+                persist_logger.info("Registros existentes, nada que insertar", records=len(records))
                 return 0, len(records)
 
             payload = [record.to_database_payload(timestamp=timestamp) for record in new_records]
 
             session.execute(insert(ccm_generaciones_table), payload)
             session.commit()
+            persist_logger.info(
+                "Registros insertados en MySQL",
+                records_inserted=len(new_records),
+                records_skipped=len(records) - len(new_records),
+            )
             return len(new_records), len(records) - len(new_records)
 
     def _fetch_existing_ids(self, session: Session, ids: Iterable[int]) -> set[int]:
