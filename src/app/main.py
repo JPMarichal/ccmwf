@@ -28,11 +28,11 @@ async def lifespan(app: FastAPI):
     """Configuración del ciclo de vida de la aplicación"""
     global email_service, drive_service, database_sync_service
 
-    # Startup
-    logger.info("🚀 Iniciando Email Service...")
-
     settings = get_settings()
     configure_logging(settings)
+
+    # Startup
+    logger.info("🚀 Iniciando Email Service...")
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
     database_sync_service = DatabaseSyncService(settings, drive_service)
