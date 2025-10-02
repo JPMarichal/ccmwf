@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from pydantic import BaseModel, Field
 
-from app.config import get_settings
+from app.config import configure_logging, get_settings
 from app.services.email_service import EmailService
 from app.services.drive_service import DriveService
 from app.services.database_sync_service import DatabaseSyncService
@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Iniciando Email Service...")
 
     settings = get_settings()
+    configure_logging(settings)
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
     database_sync_service = DatabaseSyncService(settings, drive_service)
