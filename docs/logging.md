@@ -56,19 +56,16 @@ Documentar las pautas generales de logging para todos los servicios de la aplica
 - Incluir asserts sobre contenido de logs en pruebas unitarias, modulares e integración cuando aplique.
 - Revisar logs generados tras ejecutar `pytest` y en pipelines de CI/CD.
 
-## Estado actual del logging (⚠️ 2025-10-02)
-- **Configuración central**: `src/app/config.py` usa `logging.config.dictConfig` con `RotatingFileHandler` único (`logs/email_service.log`) y `structlog`. El `formatter` estándar (`"%(asctime)s %(name)s %(levelname)s %(message)s"`) antepone metadatos al JSON de `structlog`, produciendo salidas mixtas.
-- **Separación por servicio**: Todos los servicios (`src/app/services/email_service.py`, `drive_service.py`, `database_sync_service.py`) consumen el logger raíz; no existen archivos dedicados por responsabilidad como exige `logging-rules.md`.
-- **Campos emitidos**: `TimeStamper` de `structlog` publica la clave `timestamp` en lugar de `timestamp_utc`, y no se establecen campos obligatorios (`message_id`, `etapa`, etc.) desde la configuración global.
-- **Rotación y retención**: El tope es 100 MB con cinco respaldos, sin rotación temporal ni retención explícita de 30 días.
-- **Trazabilidad actual**: Los mensajes incluyen emojis y cadenas libres; se requiere normalizar a JSON estructurado en español conforme a los lineamientos actualizados.
+## Estado actual del logging (✅ 2025-10-02)
+- **Configuración central**: `src/app/config.py` configura `TimedRotatingFileHandler` diarios por servicio (`application.log`, `email_service.log`, `drive_service.log`, `database_sync.log`) con `structlog` y `timestamp_utc` en formato JSON.
+- **Servicios instrumentados**: `src/app/services/email_service.py`, `drive_service.py`, `gmail_oauth_service.py`, `database_sync_service.py` y `src/app/main.py` usan `ensure_log_context()`/`bind_log_context()` para propagar `message_id`, `etapa`, `drive_folder_id`, `excel_file_id`, etc., sin emojis en los mensajes.
+- **Trazabilidad y métricas**: Eventos clave (inicio/fin, descargas, inserciones, errores) registran métricas (`records_processed`, `records_skipped`, `duration_seconds`) y códigos de error en español conforme a `logging-rules.md`.
+- **⚠️ Pruebas automatizadas**: Falta agregar asserts en `tests/` que verifiquen los campos obligatorios y ramas de error para cerrar la Etapa 3 de validación.
 
-## Ajustes diseñados (ℹ️ Etapa 2)
-- **Separación de handlers**: `src/app/config.py` creará `application.log`, `email_service.log`, `drive_service.log` y `database_sync.log` con `TimedRotatingFileHandler` diario (`backupCount=30`).
-- **Formato JSON puro**: Se usará `structlog.stdlib.ProcessorFormatter` con `JSONRenderer`; `timestamp_utc` será parte de cada entrada.
-- **Identificación de servicio**: Los servicios (`EmailService`, `DriveService`, `DatabaseSyncService`, `GmailOAuthService`) se inicializan con `structlog.get_logger("<servicio>")` y `bind(servicio=...)` para cumplir responsabilidad única.
-- **Console logging**: El handler raíz permanecerá en consola con el mismo formato JSON para trazabilidad en desarrollo.
-- **Próximos pasos**: Validar en la Etapa 3 que los logs incluyan campos obligatorios (ej. `message_id`, `etapa`) y eliminar emojis/iconografía no estructurada.
+## Próximos pasos inmediatos
+1. Diseñar y documentar en `tests/` los escenarios que validen los campos obligatorios y la rotación diaria.
+2. Actualizar `docs/development_guide.md` y `docs/workflow.md` con el flujo de contextos y archivos de log.
+3. Revisar semanalmente métricas de volumen (`docs/performance_metrics.md`) y registrar hallazgos en los planes con símbolos ✅/⚠️/ℹ️.
 
 ## Flujo de actualización
 1. Ajustar `logging-rules.md` si cambian los lineamientos globales.
