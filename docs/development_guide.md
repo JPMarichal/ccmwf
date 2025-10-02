@@ -1,10 +1,10 @@
-# Guía de Desarrollo - CCM Email Service
+## Guía de Desarrollo - CCM Email Service
 
 ## Requisitos Previos
 
 - Python 3.11+ (recomendado Python 3.13 según entorno actual).
 - Acceso a una cuenta de Google con permisos para habilitar Gmail API.
-- Docker y Docker Compose (para ejecución en contenedores).
+- `structlog` para logging estructurado (ver `docs/logging.md`).
 - Git.
 
 ## Estructura del Proyecto
@@ -101,6 +101,10 @@ python -m pytest src/tests/test_database_sync_service.py -vv
   - `DriveService.list_folder_files()` y `DriveService.download_file()` facilitan la lectura de XLSX desde Google Drive.
 - **Endpoint permanente**: `POST /extraccion_generacion` (ver `app/main.py`, documentado en `docs/api_documentation.md`).
 - **Logs estructurados**: Todos los mensajes emiten claves `message_id`, `etapa`, `drive_folder_id`, `excel_file_id`, `records_processed`, `records_skipped`, `table_errors`, `error_code`.
+- **ℹ️ Logging actualizado (2025-10-02)**:
+  - **✅ Handlers separados**: `src/app/config.py` define `application.log`, `email_service.log`, `drive_service.log`, `database_sync.log` con rotación diaria (`backupCount=30`).
+  - **✅ Formato JSON**: `structlog` produce `timestamp_utc` y se removieron emojis de mensajes.
+  - **⚠️ Pruebas pendientes**: Añadir asserts en `tests/` para validar campos obligatorios y rotación durante Etapa 3.
 - **Pruebas**: `tests/test_database_sync_service.py` cubre normalización y persistencia; utiliza mocks de Drive y SQLAlchemy.
 
 **ℹ️ Flujo integrado**: Tras Fase 3, cuando el correo se marca como leído y los archivos se suben a Drive, se debe invocar `/extraccion_generacion` para persistir los datos en MySQL.

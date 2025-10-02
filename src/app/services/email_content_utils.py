@@ -118,11 +118,11 @@ def extract_fecha_generacion(
 
     if logger:
         logger.warning(
-            "⚠️ No se pudo extraer fecha de generación",
+            "No se pudo extraer fecha de generación",
             fuente="parseo_fechas",
             body_preview=(body or "")[:100],
             subject=subject or "",
-            fuentes_consultadas=[source for source, _, _ in sources],
+            table_texts_preview=table_texts[:50] if table_texts else None,
         )
 
     return None

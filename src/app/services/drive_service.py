@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List, Tuple, TYPE_CHECKING
 
 import structlog
+from app.logging_utils import ensure_log_context, bind_log_context
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -32,16 +33,21 @@ class DriveService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("drive_service").bind(
+            servicio="drive_service",
+        )
         self._service = None
         self._oauth_credentials: Optional[Credentials] = None
 
-    def _ensure_service(self):
+    def _ensure_service(self, *, log_context: Optional[Dict[str, Any]] = None):
         """Inicializar el cliente de Drive una sola vez."""
         if self._service is not None:
             return
 
-        credentials = self._obtain_credentials()
+        context = ensure_log_context(log_context, etapa="drive_client")
+        logger = bind_log_context(self.logger, context)
+
+        credentials = self._obtain_credentials(context)
 
         if not credentials:
             raise ValueError(
@@ -51,7 +57,7 @@ class DriveService:
 
         self._service = build("drive", "v3", credentials=credentials)
         self._oauth_credentials = credentials
-        self.logger.info("✅ Cliente de Google Drive inicializado correctamente")
+        logger.info("Cliente de Google Drive inicializado correctamente")
 
     def set_oauth_credentials(self, creds: Credentials) -> None:
         """Recibir credenciales OAuth (por ejemplo, compartidas desde GmailOAuthService)."""
@@ -61,10 +67,15 @@ class DriveService:
 
         self._oauth_credentials = creds
         self._service = None  # Forzar re-creación con las nuevas credenciales
-        self.logger.info("🔐 Credenciales OAuth de Drive actualizadas desde Gmail")
+        bind_log_context(self.logger, ensure_log_context(etapa="drive_client")).info(
+            "Credenciales OAuth de Drive actualizadas desde Gmail"
+        )
 
-    def _obtain_credentials(self) -> Optional[Credentials]:
+    def _obtain_credentials(self, log_context: Optional[Dict[str, Any]] = None) -> Optional[Credentials]:
         """Obtener credenciales OAuth usando el mismo flujo que Gmail (installed app)."""
+
+        context = ensure_log_context(log_context, etapa="drive_client")
+        logger = bind_log_context(self.logger, context)
 
         creds = self._oauth_credentials
 
@@ -72,7 +83,7 @@ class DriveService:
             try:
                 creds.refresh(Request())
             except Exception as exc:  # noqa: BLE001
-                self.logger.warning("⚠️ Error refrescando token de Drive", error=str(exc))
+                logger.warning("Error refrescando token de Drive", error=str(exc))
                 creds = None
 
         if creds and creds.valid:
@@ -92,22 +103,22 @@ class DriveService:
                 with open(token_path, "rb") as token_file:
                     creds = pickle.load(token_file)
             except Exception as exc:  # noqa: BLE001
-                self.logger.warning("⚠️ No se pudo cargar token OAuth existente", error=str(exc))
+                logger.warning("No se pudo cargar token OAuth existente", error=str(exc))
                 creds = None
 
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
             except Exception as exc:  # noqa: BLE001
-                self.logger.warning("⚠️ Error refrescando token OAuth", error=str(exc))
+                logger.warning("Error refrescando token OAuth", error=str(exc))
                 creds = None
 
         if creds and creds.valid:
             return creds
 
         if not credentials_path or not os.path.exists(credentials_path):
-            self.logger.error(
-                "❌ No se encontró archivo de credenciales para iniciar flujo OAuth de Drive",
+            logger.error(
+                "No se encontró archivo de credenciales para iniciar flujo OAuth de Drive",
                 credentials_path=credentials_path,
             )
             return None
@@ -124,11 +135,16 @@ class DriveService:
                 with open(token_path, "wb") as token_file:
                     pickle.dump(creds, token_file)
             except Exception as exc:  # noqa: BLE001
-                self.logger.warning("⚠️ No se pudo guardar token OAuth", error=str(exc))
+                logger.warning("No se pudo guardar token OAuth", error=str(exc))
 
         return creds
 
-    def ensure_generation_folder(self, fecha_generacion: str) -> str:
+    def ensure_generation_folder(
+        self,
+        fecha_generacion: str,
+        *,
+        log_context: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Crear (si es necesario) y devolver la carpeta para una generación específica."""
         if not fecha_generacion:
             raise ValueError("La fecha de generación es obligatoria para crear la carpeta")
@@ -137,7 +153,10 @@ class DriveService:
         if not parent_folder_id:
             raise ValueError("No se configuró GOOGLE_DRIVE_ATTACHMENTS_FOLDER_ID")
 
-        self._ensure_service()
+        context = ensure_log_context(log_context, etapa="drive_folder", drive_folder_id=None)
+        logger = bind_log_context(self.logger, context)
+
+        self._ensure_service(log_context=context)
 
         safe_name = fecha_generacion.replace("'", "\'")
         query = (
@@ -156,16 +175,16 @@ class DriveService:
                 pageSize=1,
             ).execute()
         except HttpError as exc:
-            self.logger.error("❌ Error consultando carpeta de generación", error=str(exc), fecha=fecha_generacion)
+            logger.error("Error consultando carpeta de generación", error=str(exc), fecha=fecha_generacion)
             raise
 
         folders = response.get("files", []) if response else []
         if folders:
             folder_id = folders[0]["id"]
-            self.logger.info(
-                "📁 Carpeta de generación existente reutilizada",
+            folder_context = ensure_log_context(context, drive_folder_id=folder_id)
+            bind_log_context(logger, folder_context).info(
+                "Carpeta de generación existente reutilizada",
                 fecha_generacion=fecha_generacion,
-                folder_id=folder_id,
             )
             return folder_id
 
@@ -178,14 +197,14 @@ class DriveService:
         try:
             folder = files_service.create(body=metadata, fields="id, name").execute()
         except HttpError as exc:
-            self.logger.error("❌ Error creando carpeta de generación", error=str(exc), fecha=fecha_generacion)
+            logger.error("Error creando carpeta de generación", error=str(exc), fecha=fecha_generacion)
             raise
 
         folder_id = folder["id"]
-        self.logger.info(
-            "📁 Carpeta de generación creada",
+        folder_context = ensure_log_context(context, drive_folder_id=folder_id)
+        bind_log_context(logger, folder_context).info(
+            "Carpeta de generación creada",
             fecha_generacion=fecha_generacion,
-            folder_id=folder_id,
         )
         return folder_id
 
@@ -195,6 +214,8 @@ class DriveService:
         mime_type: str,
         data: bytes,
         parent_folder_id: str,
+        *,
+        log_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, str]:
         """Subir un archivo binario a Google Drive."""
         if not filename:
@@ -202,7 +223,10 @@ class DriveService:
         if not parent_folder_id:
             raise ValueError("Se requiere el ID de la carpeta destino")
 
-        self._ensure_service()
+        context = ensure_log_context(log_context, etapa="drive_upload", drive_folder_id=parent_folder_id)
+        logger = bind_log_context(self.logger, context)
+
+        self._ensure_service(log_context=context)
 
         media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime_type, resumable=True)
         metadata = {
@@ -219,19 +243,17 @@ class DriveService:
                 fields="id, name, webViewLink, webContentLink",
             ).execute()
         except HttpError as exc:
-            self.logger.error(
-                "❌ Error subiendo archivo a Drive",
+            logger.error(
+                "Error subiendo archivo a Drive",
                 error=str(exc),
                 filename=filename,
-                parent_folder_id=parent_folder_id,
             )
             raise
 
-        self.logger.info(
-            "✅ Archivo cargado en Drive",
+        logger.info(
+            "Archivo cargado en Drive",
             filename=filename,
             file_id=drive_file.get("id"),
-            parent_folder_id=parent_folder_id,
         )
         return drive_file
 
@@ -246,7 +268,10 @@ class DriveService:
         if not folder_id:
             raise ValueError("Se requiere el ID de la carpeta para listar archivos")
 
-        self._ensure_service()
+        context = ensure_log_context(etapa="drive_list", drive_folder_id=folder_id)
+        logger = bind_log_context(self.logger, context)
+
+        self._ensure_service(log_context=context)
 
         query_parts = [f"'{folder_id}' in parents", "trashed = false"]
         if mime_types:
@@ -267,9 +292,8 @@ class DriveService:
                     pageToken=page_token,
                 ).execute()
             except HttpError as exc:
-                self.logger.error(
-                    "❌ Error listando archivos en Drive",
-                    folder_id=folder_id,
+                logger.error(
+                    "Error listando archivos en Drive",
                     error=str(exc),
                 )
                 raise
@@ -279,20 +303,22 @@ class DriveService:
             if not page_token:
                 break
 
-        self.logger.info(
-            "📄 Archivos listados en carpeta",
-            folder_id=folder_id,
+        logger.info(
+            "Archivos listados en carpeta",
             total=len(files),
         )
         return files
 
-    def download_file(self, file_id: str) -> bytes:
+    def download_file(self, file_id: str, *, log_context: Optional[Dict[str, Any]] = None) -> bytes:
         """Descargar archivo binario desde Google Drive y devolver sus bytes."""
 
         if not file_id:
             raise ValueError("Se requiere el ID del archivo para descargarlo")
 
-        self._ensure_service()
+        context = ensure_log_context(log_context, etapa="drive_download", excel_file_id=file_id)
+        logger = bind_log_context(self.logger, context)
+
+        self._ensure_service(log_context=context)
         request = self._service.files().get_media(fileId=file_id)
 
         buffer = io.BytesIO()
@@ -303,22 +329,19 @@ class DriveService:
             while not done:
                 status, done = downloader.next_chunk()
                 if status:
-                    self.logger.info(
-                        "⬇️ Descargando archivo de Drive",
-                        file_id=file_id,
+                    logger.info(
+                        "Descargando archivo de Drive",
                         progress=f"{int(status.progress() * 100)}%",
                     )
         except HttpError as exc:
-            self.logger.error(
-                "❌ Error descargando archivo de Drive",
-                file_id=file_id,
+            logger.error(
+                "Error descargando archivo de Drive",
                 error=str(exc),
             )
             raise
 
-        self.logger.info(
-            "✅ Archivo descargado correctamente",
-            file_id=file_id,
+        logger.info(
+            "Archivo descargado correctamente",
             bytes=buffer.getbuffer().nbytes,
         )
         return buffer.getvalue()
@@ -328,6 +351,8 @@ class DriveService:
         fecha_generacion: str,
         attachments: List["EmailAttachment"],
         distrito: Optional[str] = None,
+        *,
+        log_context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[str], List[Dict[str, str]], List[Dict[str, str]]]:
         """Subir múltiples attachments y devolver resultados."""
 
@@ -337,8 +362,14 @@ class DriveService:
         if not attachments:
             return None, uploaded, errors
 
+        context = ensure_log_context(log_context, etapa="drive_upload")
+        logger = bind_log_context(self.logger, context)
+
         try:
-            folder_id = self.ensure_generation_folder(fecha_generacion)
+            folder_id = self.ensure_generation_folder(
+                fecha_generacion,
+                log_context=ensure_log_context(context, drive_folder_id=None),
+            )
         except Exception as exc:
             errors.append({
                 "code": "drive_folder_missing",
@@ -363,8 +394,8 @@ class DriveService:
 
             safe_filename = self._generate_unique_filename(folder_id, drive_filename)
             if safe_filename != drive_filename:
-                self.logger.info(
-                    "ℹ️ Nombre de archivo ajustado por duplicado",
+                logger.info(
+                    "Nombre de archivo ajustado por duplicado",
                     original=drive_filename,
                     ajustado=safe_filename,
                     fecha_generacion=fecha_generacion,
@@ -378,6 +409,7 @@ class DriveService:
                     mime_type=mime_type,
                     data=attachment.data,
                     parent_folder_id=folder_id,
+                    log_context=ensure_log_context(context, drive_folder_id=folder_id),
                 )
                 uploaded.append({
                     "id": drive_file.get("id"),

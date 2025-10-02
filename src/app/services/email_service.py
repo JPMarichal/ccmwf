@@ -22,6 +22,7 @@ from app.services.email_content_utils import (
     collect_table_texts,
 )
 from app.services.drive_service import DriveService
+from app.logging_utils import ensure_log_context, bind_log_context
 
 
 class EmailService:
@@ -29,13 +30,18 @@ class EmailService:
 
     def __init__(self, settings: Settings, drive_service: Optional[DriveService] = None):
         self.settings = settings
-        self.logger = structlog.get_logger()
+        self.logger = structlog.get_logger("email_service").bind(
+            servicio="email_service",
+        )
         self.drive_service = drive_service
 
         # Detectar si usar OAuth o IMAP basado en configuración
         self.use_oauth = self._should_use_oauth()
-        self.logger.info("🔧 Inicializando servicio de email",
-                        authentication="OAuth" if self.use_oauth else "IMAP")
+        init_context = ensure_log_context(etapa="inicio_servicio")
+        bind_log_context(self.logger, init_context).info(
+            "Servicio de email inicializado",
+            authentication="OAuth" if self.use_oauth else "IMAP",
+        )
 
         if self.use_oauth:
             self.gmail_oauth_service = GmailOAuthService(settings, drive_service=drive_service)
@@ -62,16 +68,18 @@ class EmailService:
 
     async def _test_imap_connection(self) -> bool:
         """Test de conexión IMAP (fallback)"""
+        context = ensure_log_context(etapa="conexion_imap_test")
+        logger = bind_log_context(self.logger, context)
+
         try:
             await self._ensure_imap_connection()
             if self._connected:
-                self.logger.info("✅ Conexión IMAP exitosa")
+                logger.info("Conexión IMAP exitosa")
                 return True
-            else:
-                self.logger.error("❌ Falló conexión IMAP")
-                return False
+            logger.error("Falló conexión IMAP")
+            return False
         except Exception as e:
-            self.logger.error("Error en test de conexión IMAP", error=str(e))
+            logger.error("Error en test de conexión IMAP", error=str(e))
             return False
         finally:
             if self.imap_client:
@@ -82,10 +90,15 @@ class EmailService:
         if self._connected and self.imap_client:
             return
 
+        context = ensure_log_context(etapa="conexion_imap")
+        logger = bind_log_context(self.logger, context)
+
         try:
-            self.logger.info("🔌 Conectando a IMAP...",
-                           server=self.settings.imap_server,
-                           port=self.settings.imap_port)
+            logger.info(
+                "Conectando a IMAP",
+                server=self.settings.imap_server,
+                port=self.settings.imap_port,
+            )
 
             self.imap_client = imapclient.IMAPClient(
                 self.settings.imap_server,
@@ -102,11 +115,11 @@ class EmailService:
             self.imap_client.enable('UTF-8')
 
             self._connected = True
-            self.logger.info("✅ Conexión IMAP establecida")
+            logger.info("Conexión IMAP establecida")
 
         except Exception as e:
             self._connected = False
-            self.logger.error("❌ Error conectando a IMAP", error=str(e))
+            logger.error("Error conectando a IMAP", error=str(e))
             raise
 
     async def process_incoming_emails(self) -> ProcessingResult:
@@ -120,6 +133,9 @@ class EmailService:
         """Procesar emails usando IMAP (fallback)"""
         start_time = datetime.now()
 
+        process_context = ensure_log_context(etapa="recepcion_correo")
+        process_logger = bind_log_context(self.logger, process_context)
+
         try:
             await self._ensure_imap_connection()
 
@@ -130,7 +146,7 @@ class EmailService:
             message_ids = self.imap_client.search(search_criteria)
 
             if not message_ids:
-                self.logger.info("ℹ️ No se encontraron correos nuevos")
+                process_logger.info("No se encontraron correos nuevos")
                 return ProcessingResult(
                     success=True,
                     processed=0,
@@ -141,8 +157,11 @@ class EmailService:
                     duration_seconds=(datetime.now() - start_time).total_seconds()
                 )
 
-            self.logger.info("📧 Procesando correos",
-                           count=len(message_ids))
+            process_logger = bind_log_context(
+                process_logger,
+                ensure_log_context(process_context, total=len(message_ids)),
+            )
+            process_logger.info("Procesando correos")
 
             results = []
             processed_count = 0
@@ -171,8 +190,11 @@ class EmailService:
 
                 except Exception as e:
                     error_count += 1
-                    self.logger.error("Error procesando mensaje individual",
-                                    message_id=msg_id, error=str(e))
+                    error_logger = bind_log_context(
+                        self.logger,
+                        ensure_log_context(process_context, message_id=str(msg_id)),
+                    )
+                    error_logger.error("Error procesando mensaje individual", error=str(e))
                     results.append({
                         'success': False,
                         'error': str(e),
@@ -182,10 +204,12 @@ class EmailService:
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds()
 
-            self.logger.info("✅ Procesamiento completado",
-                           processed=processed_count,
-                           errors=error_count,
-                           duration_seconds=duration)
+            process_logger.info(
+                "Procesamiento completado",
+                processed=processed_count,
+                errors=error_count,
+                duration_seconds=duration,
+            )
 
             return ProcessingResult(
                 success=True,
@@ -199,7 +223,7 @@ class EmailService:
 
         except Exception as e:
             end_time = datetime.now()
-            self.logger.error("❌ Error en procesamiento general", error=str(e))
+            process_logger.error("Error en procesamiento general", error=str(e))
 
             return ProcessingResult(
                 success=False,
@@ -213,6 +237,9 @@ class EmailService:
 
     async def _process_single_imap_email(self, email_message: email.message.Message, msg_id: int) -> Dict:
         """Procesar un mensaje individual usando IMAP (fallback)"""
+        log_context = ensure_log_context(etapa="recepcion_correo", message_id=str(msg_id))
+        logger = bind_log_context(self.logger, log_context)
+
         try:
             # Extraer información básica
             subject = self._decode_header(email_message['Subject']) if email_message['Subject'] else ""
@@ -233,7 +260,7 @@ class EmailService:
             table_texts = collect_table_texts(parsed_table)
 
             fecha_generacion = extract_fecha_generacion(
-                self.logger,
+                logger,
                 body,
                 html_body,
                 subject,
@@ -301,10 +328,16 @@ class EmailService:
                 else:
                     distrito = DriveService.guess_primary_district(parsed_table)
                     try:
+                        drive_context = ensure_log_context(
+                            log_context,
+                            etapa="drive_upload",
+                            drive_folder_id=drive_folder_id,
+                        )
                         folder_id, uploaded, errors = self.drive_service.upload_attachments(
                             fecha_generacion,
                             attachments,
                             distrito,
+                            log_context=drive_context,
                         )
                         drive_folder_id = folder_id
                         if uploaded:
@@ -312,9 +345,11 @@ class EmailService:
                         if errors:
                             drive_upload_errors.extend(errors)
                     except Exception as exc:  # noqa: BLE001
-                        self.logger.error(
+                        bind_log_context(
+                            logger,
+                            ensure_log_context(log_context, etapa="drive_upload"),
+                        ).error(
                             "Error subiendo attachments a Drive",
-                            message_id=msg_id,
                             error=str(exc),
                         )
                         drive_upload_errors.append({
@@ -340,44 +375,48 @@ class EmailService:
             }
 
             if success:
-                self.logger.info("✅ Mensaje procesado correctamente",
-                               message_id=msg_id,
-                               subject=subject,
-                               attachments=len(attachments),
-                               table_headers=table_headers_count,
-                               table_rows=table_rows_count)
+                logger.info(
+                    "Mensaje procesado correctamente",
+                    subject=subject,
+                    attachments=len(attachments),
+                    table_headers=table_headers_count,
+                    table_rows=table_rows_count,
+                )
                 if drive_uploaded_files:
-                    self.logger.info("📤 Archivos subidos a Drive",
-                                     message_id=msg_id,
-                                     files=len(drive_uploaded_files),
-                                     drive_folder_id=drive_folder_id)
+                    bind_log_context(
+                        logger,
+                        ensure_log_context(log_context, etapa="drive_upload", drive_folder_id=drive_folder_id),
+                    ).info(
+                        "Archivos subidos a Drive",
+                        files=len(drive_uploaded_files),
+                    )
             else:
-                self.logger.warning("⚠️ Validación de estructura fallida",
-                                    message_id=msg_id,
-                                    errors=validation_errors,
-                                    table_errors=table_errors,
-                                    subject=subject)
+                logger.warning(
+                    "Validación de estructura fallida",
+                    errors=validation_errors,
+                    table_errors=table_errors,
+                    subject=subject,
+                )
 
             if table_errors:
-                self.logger.warning("⚠️ Problemas al parsear tabla HTML",
-                                    message_id=msg_id,
-                                    errors=table_errors)
+                logger.warning("Problemas al parsear tabla HTML", errors=table_errors)
             elif parsed_table:
-                self.logger.info("📊 Tabla HTML extraída",
-                                 message_id=msg_id,
-                                 headers=table_headers_count,
-                                 rows=table_rows_count)
+                logger.info(
+                    "Tabla HTML extraída",
+                    headers=table_headers_count,
+                    rows=table_rows_count,
+                )
 
             if drive_upload_errors:
-                self.logger.warning("⚠️ Errores al subir archivos a Drive",
-                                    message_id=msg_id,
-                                    errors=drive_upload_errors)
+                bind_log_context(
+                    logger,
+                    ensure_log_context(log_context, etapa="drive_upload", drive_folder_id=drive_folder_id),
+                ).warning("Errores al subir archivos a Drive", errors=drive_upload_errors)
 
             return result
 
         except Exception as e:
-            self.logger.error("Error procesando mensaje individual",
-                            message_id=msg_id, error=str(e))
+            logger.error("Error procesando mensaje individual", error=str(e))
             return {
                 'success': False,
                 'error': str(e),
@@ -456,20 +495,19 @@ class EmailService:
 
     async def _search_imap_emails(self, query: Optional[str] = None) -> List[Dict]:
         """Buscar emails usando IMAP (fallback)"""
+        context = ensure_log_context(etapa="busqueda_imap")
+        search_logger = bind_log_context(self.logger, context)
+
         try:
             await self._ensure_imap_connection()
 
             self.imap_client.select_folder('INBOX')
 
-            if query:
-                search_criteria = query
-            else:
-                search_criteria = 'ALL'
-
+            search_criteria = query or 'ALL'
             message_ids = self.imap_client.search(search_criteria)
 
             emails = []
-            for msg_id in message_ids[:10]:  # Limitar a 10 para evitar sobrecarga
+            for msg_id in message_ids[:10]:
                 try:
                     raw_messages = self.imap_client.fetch([msg_id], ['RFC822'])
                     raw_email = raw_messages[msg_id]['RFC822']
@@ -486,13 +524,15 @@ class EmailService:
                     })
 
                 except Exception as e:
-                    self.logger.error("Error procesando email en búsqueda",
-                                    message_id=msg_id, error=str(e))
+                    bind_log_context(
+                        search_logger,
+                        ensure_log_context(context, message_id=str(msg_id)),
+                    ).error("Error procesando email en búsqueda", error=str(e))
 
             return emails
 
         except Exception as e:
-            self.logger.error("Error en búsqueda de emails", error=str(e))
+            search_logger.error("Error en búsqueda de emails", error=str(e))
             return []
 
     async def close(self):
@@ -501,9 +541,11 @@ class EmailService:
             await self.gmail_oauth_service.close()
         else:
             if self.imap_client:
+                context = ensure_log_context(etapa="conexion_imap_cierre")
+                logger = bind_log_context(self.logger, context)
                 try:
                     self.imap_client.logout()
                     self._connected = False
-                    self.logger.info("🔌 Conexión IMAP cerrada")
+                    logger.info("Conexión IMAP cerrada")
                 except Exception as e:
-                    self.logger.error("Error cerrando conexión IMAP", error=str(e))
+                    logger.error("Error cerrando conexión IMAP", error=str(e))
