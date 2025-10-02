@@ -37,10 +37,10 @@ class EmailService:
 
         # Detectar si usar OAuth o IMAP basado en configuración
         self.use_oauth = self._should_use_oauth()
-        self.logger.info(
+        init_context = ensure_log_context(etapa="inicio_servicio")
+        bind_log_context(self.logger, init_context).info(
             "Servicio de email inicializado",
             authentication="OAuth" if self.use_oauth else "IMAP",
-            etapa="inicio_servicio",
         )
 
         if self.use_oauth:
@@ -68,16 +68,18 @@ class EmailService:
 
     async def _test_imap_connection(self) -> bool:
         """Test de conexión IMAP (fallback)"""
+        context = ensure_log_context(etapa="conexion_imap_test")
+        logger = bind_log_context(self.logger, context)
+
         try:
             await self._ensure_imap_connection()
             if self._connected:
-                self.logger.info("✅ Conexión IMAP exitosa")
+                logger.info("Conexión IMAP exitosa")
                 return True
-            else:
-                self.logger.error("❌ Falló conexión IMAP")
-                return False
+            logger.error("Falló conexión IMAP")
+            return False
         except Exception as e:
-            self.logger.error("Error en test de conexión IMAP", error=str(e))
+            logger.error("Error en test de conexión IMAP", error=str(e))
             return False
         finally:
             if self.imap_client:
@@ -157,8 +159,7 @@ class EmailService:
 
             process_logger = bind_log_context(
                 process_logger,
-                ensure_log_context(etapa="recepcion_correo"),
-                total=len(message_ids),
+                ensure_log_context(process_context, total=len(message_ids)),
             )
             process_logger.info("Procesando correos")
 
@@ -191,7 +192,7 @@ class EmailService:
                     error_count += 1
                     error_logger = bind_log_context(
                         self.logger,
-                        ensure_log_context(etapa="recepcion_correo", message_id=str(msg_id)),
+                        ensure_log_context(process_context, message_id=str(msg_id)),
                     )
                     error_logger.error("Error procesando mensaje individual", error=str(e))
                     results.append({
@@ -259,7 +260,7 @@ class EmailService:
             table_texts = collect_table_texts(parsed_table)
 
             fecha_generacion = extract_fecha_generacion(
-                self.logger,
+                logger,
                 body,
                 html_body,
                 subject,
@@ -344,7 +345,10 @@ class EmailService:
                         if errors:
                             drive_upload_errors.extend(errors)
                     except Exception as exc:  # noqa: BLE001
-                        bind_log_context(logger, ensure_log_context(etapa="drive_upload")).error(
+                        bind_log_context(
+                            logger,
+                            ensure_log_context(log_context, etapa="drive_upload"),
+                        ).error(
                             "Error subiendo attachments a Drive",
                             error=str(exc),
                         )
@@ -491,20 +495,19 @@ class EmailService:
 
     async def _search_imap_emails(self, query: Optional[str] = None) -> List[Dict]:
         """Buscar emails usando IMAP (fallback)"""
+        context = ensure_log_context(etapa="busqueda_imap")
+        search_logger = bind_log_context(self.logger, context)
+
         try:
             await self._ensure_imap_connection()
 
             self.imap_client.select_folder('INBOX')
 
-            if query:
-                search_criteria = query
-            else:
-                search_criteria = 'ALL'
-
+            search_criteria = query or 'ALL'
             message_ids = self.imap_client.search(search_criteria)
 
             emails = []
-            for msg_id in message_ids[:10]:  # Limitar a 10 para evitar sobrecarga
+            for msg_id in message_ids[:10]:
                 try:
                     raw_messages = self.imap_client.fetch([msg_id], ['RFC822'])
                     raw_email = raw_messages[msg_id]['RFC822']
@@ -521,13 +524,15 @@ class EmailService:
                     })
 
                 except Exception as e:
-                    self.logger.error("Error procesando email en búsqueda",
-                                    message_id=msg_id, error=str(e))
+                    bind_log_context(
+                        search_logger,
+                        ensure_log_context(context, message_id=str(msg_id)),
+                    ).error("Error procesando email en búsqueda", error=str(e))
 
             return emails
 
         except Exception as e:
-            self.logger.error("Error en búsqueda de emails", error=str(e))
+            search_logger.error("Error en búsqueda de emails", error=str(e))
             return []
 
     async def close(self):
@@ -536,9 +541,11 @@ class EmailService:
             await self.gmail_oauth_service.close()
         else:
             if self.imap_client:
+                context = ensure_log_context(etapa="conexion_imap_cierre")
+                logger = bind_log_context(self.logger, context)
                 try:
                     self.imap_client.logout()
                     self._connected = False
-                    self.logger.info("🔌 Conexión IMAP cerrada")
+                    logger.info("Conexión IMAP cerrada")
                 except Exception as e:
-                    self.logger.error("Error cerrando conexión IMAP", error=str(e))
+                    logger.error("Error cerrando conexión IMAP", error=str(e))
