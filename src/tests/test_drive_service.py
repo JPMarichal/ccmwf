@@ -47,6 +47,11 @@ def test_format_filename_sanitizes_components(drive_service):
     assert "__" not in result
 
 
+def test_format_filename_strips_gender_prefix_when_followed_by_digits(drive_service):
+    result = drive_service.format_filename("20250110", "14A", "F_14A_doc.pdf")
+    assert result.startswith("20250110_14A_14A_doc.pdf")
+
+
 def test_generate_unique_filename_returns_original_when_available(drive_service):
     drive_service._service.files.return_value = _files_service({"20250110_doc.pdf"})
 

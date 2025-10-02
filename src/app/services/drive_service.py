@@ -402,6 +402,7 @@ class DriveService:
     ) -> str:
         """Generar nombre consistente YYYYMMDD_Distrito_original.ext."""
         sanitized_original = DriveService._sanitize_filename(original_name)
+        sanitized_original = DriveService._strip_leading_gender_prefix(sanitized_original)
         sanitized_district = DriveService._sanitize_component(distrito)
 
         parts = [
@@ -419,6 +420,29 @@ class DriveService:
         value = value.strip("_") or "archivo"
         value = re.sub(r"__+", "_", value)
         return cls._enforce_max_length(value)
+
+    @classmethod
+    def _strip_leading_gender_prefix(cls, filename: str) -> str:
+        """Eliminar prefijos tipo `F_` o `M_` cuando forman parte del nombre original."""
+
+        if not filename:
+            return filename
+
+        base, ext = os.path.splitext(filename)
+        match = re.match(r"^(?P<prefix>[FMfm])_(?P<rest>.+)", base)
+        if not match:
+            return filename
+
+        remainder = match.group("rest")
+        if not remainder:
+            return filename
+
+        # Solo remover cuando el resto comienza con dígito (ej. `F_14A` → `14A`).
+        if not remainder[0].isdigit():
+            return filename
+
+        cleaned = cls._enforce_max_length(f"{remainder}{ext}")
+        return cleaned
 
     @classmethod
     def _sanitize_component(cls, value: Optional[str]) -> str:
@@ -505,7 +529,9 @@ class DriveService:
             for key, value in row.items():
                 if "distrito" in key.lower():
                     if isinstance(value, str) and value.strip():
-                        return value.strip()
+                        candidate = value.strip()
+                        if re.search(r"\d", candidate):
+                            return candidate
         return None
 
     def close(self):
