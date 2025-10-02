@@ -56,6 +56,13 @@ Documentar las pautas generales de logging para todos los servicios de la aplica
 - Incluir asserts sobre contenido de logs en pruebas unitarias, modulares e integración cuando aplique.
 - Revisar logs generados tras ejecutar `pytest` y en pipelines de CI/CD.
 
+## Estado actual del logging (⚠️ 2025-10-02)
+- **Configuración central**: `src/app/config.py` usa `logging.config.dictConfig` con `RotatingFileHandler` único (`logs/email_service.log`) y `structlog`. El `formatter` estándar (`"%(asctime)s %(name)s %(levelname)s %(message)s"`) antepone metadatos al JSON de `structlog`, produciendo salidas mixtas.
+- **Separación por servicio**: Todos los servicios (`src/app/services/email_service.py`, `drive_service.py`, `database_sync_service.py`) consumen el logger raíz; no existen archivos dedicados por responsabilidad como exige `logging-rules.md`.
+- **Campos emitidos**: `TimeStamper` de `structlog` publica la clave `timestamp` en lugar de `timestamp_utc`, y no se establecen campos obligatorios (`message_id`, `etapa`, etc.) desde la configuración global.
+- **Rotación y retención**: El tope es 100 MB con cinco respaldos, sin rotación temporal ni retención explícita de 30 días.
+- **Trazabilidad actual**: Los mensajes incluyen emojis y cadenas libres; se requiere normalizar a JSON estructurado en español conforme a los lineamientos actualizados.
+
 ## Flujo de actualización
 1. Ajustar `logging-rules.md` si cambian los lineamientos globales.
 2. Actualizar planes de fase y documentación (`docs/plan_fase4.md`, `docs/development_guide.md`) con los cambios específicos.
