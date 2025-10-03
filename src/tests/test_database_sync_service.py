@@ -17,11 +17,23 @@ def _ensure_pandas_available() -> None:
 
     try:
         import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
-    except Exception as exc:  # pragma: no cover - dependiente del entorno
-        pytest.skip(
-            "Pandas no está disponible o falló su inicialización en el entorno de pruebas (fase 4)",
-            allow_module_level=True,
-        )
+    except ImportError:
+        base_dir = Path(__file__).resolve().parents[3]
+        candidate_site_packages = [
+            base_dir / ".venv" / "Lib" / "site-packages",
+            base_dir / "venv" / "Lib" / "site-packages",
+        ]
+        for candidate in candidate_site_packages:
+            if candidate.exists():
+                sys.path.insert(0, str(candidate))
+                break
+        try:
+            import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
+        except Exception:  # pragma: no cover - dependiente del entorno
+            pytest.skip(
+                "Pandas no está disponible o falló su inicialización en el entorno de pruebas (fase 4)",
+                allow_module_level=True,
+            )
 
 
 _ensure_pandas_available()
