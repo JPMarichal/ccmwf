@@ -101,7 +101,11 @@ def _parse_table_element(table) -> Tuple[Optional[ParsedTable], List[str]]:
             continue
         padded = row + [""] * (header_count - len(row))
         row_dict = {headers[i]: padded[i] for i in range(header_count)}
-        if _row_resembles_headers(row_dict, headers):
+        if (
+            _row_resembles_headers(row_dict, headers)
+            or _row_is_section_marker(row_dict)
+            or not _row_has_required_data(row_dict)
+        ):
             continue
         normalized_rows.append(row_dict)
 
@@ -203,3 +207,31 @@ def _row_resembles_headers(row: Dict[str, str], headers: List[str]) -> bool:
     normalized_headers = {_normalize_text(header) for header in headers}
     normalized_values = {_normalize_text(value) for value in row.values() if value}
     return normalized_values and normalized_values <= normalized_headers
+
+
+def _row_is_section_marker(row: Dict[str, str]) -> bool:
+    markers = {"6 semanas", "3 semanas", "zona horaria", "observaciones"}
+    values = {_normalize_text(value) for value in row.values() if value}
+    if not values:
+        return False
+    if any(any(marker in value for marker in markers) for value in values):
+        has_numeric = any(_looks_numeric(value) for value in row.values() if value)
+        return not has_numeric
+    return False
+
+
+def _row_has_required_data(row: Dict[str, str]) -> bool:
+    distrito_key = None
+    zona_key = None
+    for original_key in row.keys():
+        normalized_key = _normalize_text(original_key)
+        if "distrito" in normalized_key and not distrito_key:
+            distrito_key = original_key
+        if "zona" in normalized_key and not zona_key:
+            zona_key = original_key
+
+    if distrito_key and not str(row.get(distrito_key, "")).strip():
+        return False
+    if zona_key and not str(row.get(zona_key, "")).strip():
+        return False
+    return True
