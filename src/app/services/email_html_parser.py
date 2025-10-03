@@ -81,7 +81,13 @@ def _parse_table_element(table) -> Tuple[Optional[ParsedTable], List[str]]:
                 extra_texts.extend(non_empty)
             continue
 
-        if header_row_found and any(text.strip() for text in cell_texts):
+        if header_row_found:
+            non_empty_count = sum(bool(text.strip()) for text in cell_texts)
+            if non_empty_count == 0:
+                continue
+            if non_empty_count <= 1:
+                # Filtrar filas de separadores como "6 SEMANAS"
+                continue
             rows.append(cell_texts)
 
     if not headers:
@@ -94,7 +100,10 @@ def _parse_table_element(table) -> Tuple[Optional[ParsedTable], List[str]]:
         if not any(text.strip() for text in row):
             continue
         padded = row + [""] * (header_count - len(row))
-        normalized_rows.append({headers[i]: padded[i] for i in range(header_count)})
+        row_dict = {headers[i]: padded[i] for i in range(header_count)}
+        if _row_resembles_headers(row_dict, headers):
+            continue
+        normalized_rows.append(row_dict)
 
     if not normalized_rows:
         errors.append("rows_missing")
@@ -186,3 +195,11 @@ def _normalize_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value)
     ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
     return ascii_text.strip().lower()
+
+
+def _row_resembles_headers(row: Dict[str, str], headers: List[str]) -> bool:
+    """Detect rows that duplicate header labels to evitar falsos positivos."""
+
+    normalized_headers = {_normalize_text(header) for header in headers}
+    normalized_values = {_normalize_text(value) for value in row.values() if value}
+    return normalized_values and normalized_values <= normalized_headers

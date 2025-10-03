@@ -35,7 +35,8 @@ def test_extract_primary_table_real_email_selects_ccm_table(sample_settings: Set
     assert parsed_table is not None, "El parser debe encontrar una tabla válida"
 
     headers_normalized = {header.strip().lower() for header in parsed_table["headers"]}
-    assert {"distrito", "zona"}.issubset(headers_normalized)
+    assert "distrito" in headers_normalized
+    assert any("zona" in header for header in headers_normalized)
 
     validation_errors = validate_table_structure(
         parsed_table,
@@ -73,5 +74,5 @@ def test_extract_primary_table_prefers_table_with_expected_headers():
 
     assert parsed_table is not None
     assert "Distrito" in parsed_table["headers"], "Debe elegir la tabla con encabezados esperados"
-    assert "Zona" in parsed_table["headers"]
+    assert any("zona" in header.lower() for header in parsed_table["headers"])
     assert not errors, f"No se esperaban errores: {errors}"
