@@ -6,4 +6,4 @@ Los issues se levantarán siempre desde main, por lo que es prioritario que, si 
 
 Los issues deben estar precedidos de un análisis previo. Ese análisis puede no ser concluyente, pero sí debe ser suficiente para obtener el planteamiento del problema. Si el análisis no se ha hecho, cuestiona al usuario si debe hacerse. 
 
-Para la descripción del issue, proporcionarás una descripción del problema, junto con los pasos para reproducirlo (si los hay), cualquier indicio que exista y los criterios de aceptación. 
+Para la descripción del issue, proporcionarás un título breve y la descripción del problema, junto con los pasos para reproducirlo (si los hay), cualquier indicio que exista y los criterios de aceptación. 
