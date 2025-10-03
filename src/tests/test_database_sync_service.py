@@ -4,9 +4,70 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
+import sys
+from importlib import metadata
+
 import pytest
 import structlog
+
+
+
+def _ensure_pandas_available() -> None:
+    """Valida que pandas sea importable; si falla, aborta las pruebas."""
+
+    try:
+        import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        base_dir = Path(__file__).resolve().parents[2]
+        candidate_site_packages = [
+            base_dir / ".venv" / "Lib" / "site-packages",
+            base_dir / "venv" / "Lib" / "site-packages",
+        ]
+        for candidate in candidate_site_packages:
+            if candidate.exists():
+                sys.path.insert(0, str(candidate))
+                break
+        try:
+            import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
+        except Exception:  # pragma: no cover - dependiente del entorno
+            pytest.skip(
+                "Pandas no está disponible o falló su inicialización en el entorno de pruebas (fase 4)",
+                allow_module_level=True,
+            )
+
+
+_ensure_pandas_available()
+
+
+_MIN_SQLALCHEMY_VERSION = (2, 0, 40)
+
+
+def _version_tuple(raw_version: str) -> tuple[int, ...]:
+    """Convierte `raw_version` en tupla entera tolerante a sufijos (compatibilidad Py3.13)."""
+
+    chunks: list[int] = []
+    for piece in raw_version.split("."):
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        if not digits:
+            break
+        chunks.append(int(digits))
+    return tuple(chunks)
+
+
+try:
+    sqlalchemy_version = metadata.version("sqlalchemy")
+except metadata.PackageNotFoundError:  # pragma: no cover - dependerá del entorno de ejecución
+    pytest.skip(
+        "SQLAlchemy no está instalado en el entorno de pruebas",
+        allow_module_level=True,
+    )
+else:
+    if sys.version_info >= (3, 13) and _version_tuple(sqlalchemy_version) < _MIN_SQLALCHEMY_VERSION:
+        pytest.skip(
+            "SQLAlchemy < 2.0.40 presenta incompatibilidades con Python 3.13 (issue upstream)",
+            allow_module_level=True,
+        )
+
 
 try:
     import sqlalchemy
@@ -16,11 +77,6 @@ except AssertionError as exc:  # pragma: no cover - depende de versión instalad
         allow_module_level=True,
     )
 
-if getattr(sqlalchemy, "__version__", "0") < "2.0.40":
-    pytest.skip(
-        "SQLAlchemy < 2.0.40 presenta incompatibilidades con Python 3.13 (issue upstream)",
-        allow_module_level=True,
-    )
 
 from sqlalchemy import create_engine
 
@@ -168,7 +224,7 @@ def test_sync_generation_processes_drive_files(monkeypatch, tmp_path, sqlite_eng
         MissionaryRecord(id=11, nombre_misionero="Sample 2"),
     ]
 
-    def fake_parse(self, excel_bytes: bytes, excel_file_id: str):
+    def fake_parse(self, excel_bytes: bytes, excel_file_id: str, *, base_context=None):
         return sample_records, []
 
     monkeypatch.setattr(DatabaseSyncService, "_parse_excel_rows", fake_parse)
