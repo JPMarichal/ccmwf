@@ -2,10 +2,10 @@
 trigger: always_on
 ---
 
-Esta aplicación está bajo git. Deben hacerse commits y pulls cada vez que una tarea esté satisfecha, se alcance un hito o se complete una fase. 
+Esta aplicación está bajo git. Deben hacerse commits y pushes cada vez que una tarea esté satisfecha, se alcance un hito o se complete una fase.
 
-Cuando el usuario diga "haz commit" se hará tanto add, commit y push sobre la rama actual, asegurándose de no enviar archivos de uso temporal, como pruebas o logs temporales que ya no estén en uso según el contexto de la operación.
+Cuando el usuario diga "haz commit" se ejecutará el add, commit y push en la rama actual, evitando incluir archivos de uso temporal (pruebas, logs u otros artefactos descartables según el contexto de la operación).
 
-El mensaje del commit irá en español, comenzar por letra capital mayúscula, y será precedido por un prefijo que indique la naturaleza del cambio, como docs:, test:, refactor:, fix:, chore:, feat: o similar. El mensaje del commit, a pesar de ser breve, debe resumir de manera comprensiva el cambio efectuado, pudiendo usarse git diff para precisar los cambios. Debe responder a la pregunta ¿qué se hizo? Ejemplo: "docs: Se ajustó el mensaje y se aseguró la salida de log".
+El mensaje del commit irá en español, comenzará con letra capital y un prefijo que identifique el tipo de cambio (por ejemplo, docs:, test:, refactor:, fix:, chore:, feat:). Debe describir en pasado lo realizado, responder de forma concisa a “¿qué fue lo que cambió?”, enumerar en una frase breve todos los ajustes relevantes y puede apoyarse en `git diff` para precisar los detalles (ejemplo: `docs: Se detallaron las reglas de mensajes y se actualizó la guía de commits`).
 
-Deberás asegurarte de que no hay conflictos o problemas. Si los hay, detenerte y avisar, indicando al usuario el problema y sugiriendo la acción.
+Debe verificarse que no existan conflictos ni incidencias. Si se detecta alguno, se detendrá el proceso y se notificará al usuario con la descripción del problema y la acción sugerida.
