@@ -362,7 +362,7 @@ async def test_process_incoming_emails_drive_missing_fecha_generacion():
 
 
 @pytest.mark.asyncio
-async def test_process_incoming_emails_column_missing_generates_error():
+async def test_process_incoming_emails_missing_zona_allows_processing():
     settings = _build_settings()
     service = _setup_service(settings)
     gmail_service, messages, labels = _mock_chain()
@@ -393,8 +393,10 @@ async def test_process_incoming_emails_column_missing_generates_error():
     result = await service.process_incoming_emails()
 
     detail = result.details[0]
-    assert detail["success"] is False
-    assert "value_missing:Zona:0" in detail["table_errors"]
+    # Este escenario valida que la ausencia de valores en la columna Zona no bloquea el procesamiento.
+    assert detail["success"] is True
+    assert detail["table_errors"] == []
+    assert detail["parsed_table"]["rows"][0]["Distrito"] == "15C"
 
 
 @pytest.mark.asyncio

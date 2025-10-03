@@ -106,6 +106,7 @@ python -m pytest src/tests/test_database_sync_service.py -vv
   - **✅ Formato JSON**: `structlog` produce `timestamp_utc` y se removieron emojis de mensajes.
   - **⚠️ Pruebas pendientes**: Añadir asserts en `tests/` para validar campos obligatorios y rotación durante Etapa 3.
 - **Pruebas**: `tests/test_database_sync_service.py` cubre normalización y persistencia; utiliza mocks de Drive y SQLAlchemy.
+- **ℹ️ Zona ≡ Rama**: Durante la recepción de correos, solo se valida la columna `Distrito`; la zona se deriva de la rama correspondiente en etapas posteriores.
 
 **ℹ️ Flujo integrado**: Tras Fase 3, cuando el correo se marca como leído y los archivos se suben a Drive, se debe invocar `/extraccion_generacion` para persistir los datos en MySQL.
 

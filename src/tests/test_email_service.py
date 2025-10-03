@@ -234,7 +234,8 @@ class TestEmailService:
         result = await email_service._process_single_imap_email(msg, 789)
 
         assert result['success'] is False
-        assert any(err.startswith('column_missing:') for err in result['table_errors'])
+        assert "rows_missing" in result['table_errors']
+        assert "table_rows_missing" in result['table_errors']
         assert result['drive_folder_id'] == "folder123"
         assert result['drive_uploaded_files'] == []
         assert result['drive_upload_errors'] == []

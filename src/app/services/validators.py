@@ -8,9 +8,7 @@ from typing import Iterable, List, Optional, Dict
 from app.models import EmailAttachment
 
 
-_COLUMN_ALIASES: Dict[str, List[str]] = {
-    "zona": ["zona horaria"],
-}
+_COLUMN_ALIASES: Dict[str, List[str]] = {}
 
 
 _SUBJECT_NORMALIZER = re.compile(r"\s+")

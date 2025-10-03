@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Search Configuration
     email_subject_pattern: str = "Misioneros que llegan"
     processed_label: str = "misioneros-procesados"
-    email_table_required_columns: List[str] = Field(default_factory=lambda: ["Distrito", "Zona"])
+    email_table_required_columns: List[str] = Field(default_factory=lambda: ["Distrito"])
 
     # Application Configuration
     app_env: str = "development"

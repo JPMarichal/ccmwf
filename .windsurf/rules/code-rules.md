@@ -4,6 +4,9 @@ trigger: always_on
 
 Si creas archivos temporales para pruebas rápidas, deberás crear el menor número posible, reutilizando mejor que crear innecesariamente, y deberás eliminarlos una vez pasada la prueba. No debe dejarse rastro de archivos o código innecesarios para el sistema y para el objetivo del proyecto. Sobre todo, dichos archivos no deben publicarse en git.
 
+No crees ni ejecutes bloques ad hoc con python - <<'PY' ....
+Cuando necesites ejecutar código auxiliar de un solo uso, crea un script temporal en el repositorio, ejecútalo y elimínalo en el mismo flujo, cuando ya no se use, para que no requiera intervención adicional y la salida sea legible para ti.
+
 Las credenciales, datos de entorno, etc, están en .env y deben ser utilizadas desde allí. La intención es prescindir de config.js, por lo que .env es la fuente de verdad y config.js una referencia histórica. Todos los servicios de Google deben reutilizar la autorización oAuth existente.
 
 Antes de introducir nueva funcionalidad, confirma que las variables necesarias existen en .env; si hace falta una nueva, agrégala allí primero, nunca en el código fuente.
@@ -20,4 +23,4 @@ Todos los logs deben emitirse en español e incluir los campos relevantes (por e
 
 Toda nueva funcionalidad debe venir acompañada de pruebas unitarias, modulares y/o de integración que cubran casos exitosos y escenarios de fallo relevantes. **Cada prueba debe estar comentada y documentada** (descripción clara y, de ser posible, referencia al requisito que valida) para facilitar su revisión y comprensión.
 
-Siempre procede a un análisis antes de sugerir soluciones. Lo que se pretende siempre es obtener certezas en lugar de hipótesis o especulaciones. 
+Siempre procede a un análisis antes de sugerir soluciones. Lo que se pretende siempre es obtener certezas en lugar de hipótesis o especulaciones.

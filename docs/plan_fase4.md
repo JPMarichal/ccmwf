@@ -91,6 +91,7 @@ Persistir en MySQL la información de misioneros extraída de los archivos XLSX 
 ### Actualizaciones recientes (2025-10-02)
 - **✅ Parser HTML**: `src/app/services/email_html_parser.py` ahora evalúa todas las tablas y selecciona la más cercana al formato de `extraer_datos.js`, evitando falsos positivos reportados en `logs/email_service.log`.
 - **✅ Pruebas**: Se añadieron `tests/test_email_html_parser.py` para cubrir casos reales (`originalBody.html`) y escenarios alternos sin tablas o con tablas ambiguas.
+- **ℹ️ Zona ≡ Rama**: La validación ya no exige columna "Zona" en correos; se asume equivalencia con la rama asignada. El parser conserva filas con zona vacía y la derivación se realizará en etapas posteriores.
 
 ## Plan Semanal
 

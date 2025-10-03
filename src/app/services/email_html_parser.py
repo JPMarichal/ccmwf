@@ -86,8 +86,19 @@ def _parse_table_element(table) -> Tuple[Optional[ParsedTable], List[str]]:
             if non_empty_count == 0:
                 continue
             if non_empty_count <= 1:
-                # Filtrar filas de separadores como "6 SEMANAS"
-                continue
+                distrito_index = None
+                for idx, header in enumerate(headers):
+                    if "distrito" in _normalize_text(header):
+                        distrito_index = idx
+                        break
+                distrito_value = (
+                    cell_texts[distrito_index].strip()
+                    if distrito_index is not None and distrito_index < len(cell_texts)
+                    else ""
+                )
+                if not distrito_value:
+                    # Filtrar filas de separadores como "6 SEMANAS"
+                    continue
             rows.append(cell_texts)
 
     if not headers:
@@ -222,16 +233,12 @@ def _row_is_section_marker(row: Dict[str, str]) -> bool:
 
 def _row_has_required_data(row: Dict[str, str]) -> bool:
     distrito_key = None
-    zona_key = None
     for original_key in row.keys():
         normalized_key = _normalize_text(original_key)
         if "distrito" in normalized_key and not distrito_key:
             distrito_key = original_key
-        if "zona" in normalized_key and not zona_key:
-            zona_key = original_key
 
     if distrito_key and not str(row.get(distrito_key, "")).strip():
         return False
-    if zona_key and not str(row.get(zona_key, "")).strip():
-        return False
-    return True
+
+    return bool(distrito_key)
