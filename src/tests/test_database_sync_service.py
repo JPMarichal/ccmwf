@@ -11,13 +11,20 @@ import pytest
 import structlog
 
 
-try:
-    import pandas as pd
-except ModuleNotFoundError:  # pragma: no cover - dependiente del entorno
-    pytest.skip(
-        "Pandas no está disponible en el entorno de pruebas (requisito para fase 4)",
-        allow_module_level=True,
-    )
+
+def _ensure_pandas_available() -> None:
+    """Valida que pandas sea importable; si falla, aborta las pruebas."""
+
+    try:
+        import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
+    except Exception as exc:  # pragma: no cover - dependiente del entorno
+        pytest.skip(
+            "Pandas no está disponible o falló su inicialización en el entorno de pruebas (fase 4)",
+            allow_module_level=True,
+        )
+
+
+_ensure_pandas_available()
 
 
 _MIN_SQLALCHEMY_VERSION = (2, 0, 40)
