@@ -4,9 +4,51 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
+import sys
+from importlib import metadata
+
 import pytest
 import structlog
+
+
+try:
+    import pandas as pd
+except ModuleNotFoundError:  # pragma: no cover - dependiente del entorno
+    pytest.skip(
+        "Pandas no está disponible en el entorno de pruebas (requisito para fase 4)",
+        allow_module_level=True,
+    )
+
+
+_MIN_SQLALCHEMY_VERSION = (2, 0, 40)
+
+
+def _version_tuple(raw_version: str) -> tuple[int, ...]:
+    """Convierte `raw_version` en tupla entera tolerante a sufijos (compatibilidad Py3.13)."""
+
+    chunks: list[int] = []
+    for piece in raw_version.split("."):
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        if not digits:
+            break
+        chunks.append(int(digits))
+    return tuple(chunks)
+
+
+try:
+    sqlalchemy_version = metadata.version("sqlalchemy")
+except metadata.PackageNotFoundError:  # pragma: no cover - dependerá del entorno de ejecución
+    pytest.skip(
+        "SQLAlchemy no está instalado en el entorno de pruebas",
+        allow_module_level=True,
+    )
+else:
+    if sys.version_info >= (3, 13) and _version_tuple(sqlalchemy_version) < _MIN_SQLALCHEMY_VERSION:
+        pytest.skip(
+            "SQLAlchemy < 2.0.40 presenta incompatibilidades con Python 3.13 (issue upstream)",
+            allow_module_level=True,
+        )
+
 
 try:
     import sqlalchemy
@@ -16,11 +58,6 @@ except AssertionError as exc:  # pragma: no cover - depende de versión instalad
         allow_module_level=True,
     )
 
-if getattr(sqlalchemy, "__version__", "0") < "2.0.40":
-    pytest.skip(
-        "SQLAlchemy < 2.0.40 presenta incompatibilidades con Python 3.13 (issue upstream)",
-        allow_module_level=True,
-    )
 
 from sqlalchemy import create_engine
 
