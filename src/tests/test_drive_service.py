@@ -59,7 +59,15 @@ def test_format_filename_avoids_duplicate_district_component(drive_service):
 
 def test_format_filename_removes_prefixes_from_district_values(drive_service):
     result = drive_service.format_filename("20250922", "F District 10C", "District 10C.pdf")
-    assert result == "20250922_District_10C.pdf"
+    assert result == "20250922_Distrito_10C.pdf"
+
+
+def test_format_filename_localizes_english_district_keyword(drive_service):
+    """Asegura que valores 'District' se traduzcan a 'Distrito' en el resultado final."""
+
+    result = drive_service.format_filename("20250922", "District 7E", "District 7E.xlsx")
+
+    assert result == "20250922_Distrito_7E.xlsx"
 
 
 def test_guess_primary_district_strips_single_letter_prefixes():
@@ -170,7 +178,7 @@ def test_upload_attachments_generates_unique_names_for_duplicates(monkeypatch, d
 
     captured_names = []
 
-    def fake_upload_file(*, filename, mime_type, data, parent_folder_id):
+    def fake_upload_file(*, filename, mime_type, data, parent_folder_id, **kwargs):
         captured_names.append(filename)
         return {
             "id": f"id_{len(captured_names)}",
