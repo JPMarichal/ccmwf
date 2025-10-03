@@ -114,23 +114,24 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 - ⏳ **Cache de resultados**: Optimización para múltiples reportes
 - ⏳ **Validación de datos**: Verificación de completitud
 - ⏳ **Formateo inicial**: Preparación de estructuras de datos
+- ⏳ **Diseño con patrones**: Implementar fachada de preparación, estrategias de caché y plantillas reutilizables (Facade, Strategy, Template Method, Observer, Builder)
 
 **Entregables**:
 - Dataset preparado para cada tipo de reporte
 - Estadísticas calculadas (conteos, promedios, etc.)
-- Datos validados y listos para exportación
 
 **Recursos**:
 - Consultas SQL optimizadas
 - Sistema de cache (Redis opcional)
+- **Patrones de diseño**: Implementar fachada de preparación, estrategias de caché y plantillas reutilizables (Facade, Strategy, Template Method, Observer, Builder)
 
-**Estado**: ✅ **Diseño de consultas completado**
+- **Estado**: ✅ **Diseño de consultas completado**
 
 ---
 
 ### Fase 6: Generación de Reportes por Telegram
 **Objetivo**: Report Service envía notificaciones push automáticas
-
+{{ ... }}
 **Actividades**:
 - ✅ **Configuración de bot**: Token y credenciales de Telegram
 - ✅ **Formateo de mensaje**: Estructura de notificación clara
