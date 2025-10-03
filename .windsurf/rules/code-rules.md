@@ -19,3 +19,5 @@ Debes respetar los principios SOLID y KISS y buscar el arreglo en patrones de di
 Todos los logs deben emitirse en español e incluir los campos relevantes (por ejemplo, message_id, table_errors, table_rows, table_headers, etc.) para facilitar la trazabilidad.
 
 Toda nueva funcionalidad debe venir acompañada de pruebas unitarias, modulares y/o de integración que cubran casos exitosos y escenarios de fallo relevantes. **Cada prueba debe estar comentada y documentada** (descripción clara y, de ser posible, referencia al requisito que valida) para facilitar su revisión y comprensión.
+
+Siempre procede a un análisis antes de sugerir soluciones. Lo que se pretende siempre es obtener certezas en lugar de hipótesis o especulaciones. 
