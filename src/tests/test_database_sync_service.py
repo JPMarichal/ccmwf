@@ -7,6 +7,21 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 import structlog
+
+try:
+    import sqlalchemy
+except AssertionError as exc:  # pragma: no cover - depende de versión instalada
+    pytest.skip(
+        "SQLAlchemy no es compatible con Python 3.13 en la versión instalada (AssertionError al importar)",
+        allow_module_level=True,
+    )
+
+if getattr(sqlalchemy, "__version__", "0") < "2.0.40":
+    pytest.skip(
+        "SQLAlchemy < 2.0.40 presenta incompatibilidades con Python 3.13 (issue upstream)",
+        allow_module_level=True,
+    )
+
 from sqlalchemy import create_engine
 
 from app.config import Settings
