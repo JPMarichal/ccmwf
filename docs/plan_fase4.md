@@ -88,6 +88,10 @@ Persistir en MySQL la información de misioneros extraída de los archivos XLSX 
 - Checklist de despliegue para base de datos y credenciales.
 - Endpoint permanente (`POST /extraccion_generacion`) para invocar la extracción y sincronización por generación, reutilizable para pruebas controladas y para la ejecución encadenada tras la fase 3.
 
+### Actualizaciones recientes (2025-10-02)
+- **✅ Parser HTML**: `src/app/services/email_html_parser.py` ahora evalúa todas las tablas y selecciona la más cercana al formato de `extraer_datos.js`, evitando falsos positivos reportados en `logs/email_service.log`.
+- **✅ Pruebas**: Se añadieron `tests/test_email_html_parser.py` para cubrir casos reales (`originalBody.html`) y escenarios alternos sin tablas o con tablas ambiguas.
+
 ## Plan Semanal
 
 ### Semana 9 – Análisis y Diseño
