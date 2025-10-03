@@ -84,25 +84,32 @@ graph TD
 - **Base de Datos**: MySQL
 - **Tabla Principal**: Información de misioneros por rama/zona/distrito
 - **Configuración**: Rama específica definida en archivo `.env`
-
 ## Generación de Reportes
 
 ### Tipos de Reportes
 Una vez procesados los datos, el sistema genera automáticamente:
 
+### Capa de Preparación (Fase 5)
+- **`ReportPreparationService` (Fachada)**: Recibe peticiones de reportes y orquesta pipelines de datos. Internamente aplica un **Template Method** (`BaseDatasetPipeline`) que asegura el flujo carga → validación → transformación → serialización.
+- **Estrategias de Caché (Strategy)**: Se selecciona dinámicamente `InMemoryCacheStrategy` o `RedisCacheStrategy` según las variables de entorno (`CACHE_PROVIDER`, `REPORT_CACHE_TTL_MINUTES`). Ambas reportan métricas (`cache_hit`, `cache_miss`, `duration_ms`).
+- **Builders de DTOs**: `BranchSummaryBuilder`, `UpcomingArrivalBuilder` y otros encapsulan la creación de estructuras complejas sin constructores con demasiados parámetros.
+- **Observer/Event Publisher**: Cuando Fase 4 inserta nuevos datos, se emite `dataset.invalidated` para que Fases 6-8 refresquen la información antes de distribuirla (Telegram, email, Sheets).
+- **Adapters** (opcional): Se utilizan si es necesario envolver vistas MySQL o dataframes de `pandas` para mantener la interfaz estable de los DTOs.
+
+Una vez que la fachada entrega los datasets normalizados, el sistema genera automáticamente:
+
 1. **Reporte en Google Sheets**:
    - Branch in a Glance
    
 2. **Reportes por Telegram**:
-   - Notificaciones push:
-     - Distritos que llegan esta semana
-     - Próximos cumpleaños
+    - Notificaciones push:
+      - Distritos que llegan esta semana
+      - Próximos cumpleaños
    
 3. **Reportes por Correo Electrónico**:
    - Por determinar
 
-### Configuración de Destinatarios
-- **Rama específica**: Definida en variable de entorno a través de archivo .env
+### Configuración deDestinatarios
 - **Frecuencia**: Automática después de cada procesamiento
 - **Formato**: Adaptable según el medio de distribución
 
