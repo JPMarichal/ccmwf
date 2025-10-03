@@ -18,7 +18,7 @@ def _ensure_pandas_available() -> None:
     try:
         import pandas as pd  # noqa: F401  # pylint: disable=import-outside-toplevel
     except ImportError:
-        base_dir = Path(__file__).resolve().parents[3]
+        base_dir = Path(__file__).resolve().parents[2]
         candidate_site_packages = [
             base_dir / ".venv" / "Lib" / "site-packages",
             base_dir / "venv" / "Lib" / "site-packages",
@@ -224,7 +224,7 @@ def test_sync_generation_processes_drive_files(monkeypatch, tmp_path, sqlite_eng
         MissionaryRecord(id=11, nombre_misionero="Sample 2"),
     ]
 
-    def fake_parse(self, excel_bytes: bytes, excel_file_id: str):
+    def fake_parse(self, excel_bytes: bytes, excel_file_id: str, *, base_context=None):
         return sample_records, []
 
     monkeypatch.setattr(DatabaseSyncService, "_parse_excel_rows", fake_parse)
