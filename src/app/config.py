@@ -145,9 +145,7 @@ def configure_logging(settings: Settings):
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.UnicodeDecoder(),
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter(
-                structlog.processors.JSONRenderer()
-            ),
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),

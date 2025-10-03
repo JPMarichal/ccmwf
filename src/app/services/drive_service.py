@@ -437,7 +437,11 @@ class DriveService:
         sanitized_original = DriveService._sanitize_filename(original_name)
         sanitized_original = DriveService._strip_leading_gender_prefix(sanitized_original)
         original_base, original_ext = os.path.splitext(sanitized_original)
+        original_base = DriveService._localize_district_label(original_base)
+        sanitized_original = f"{original_base}{original_ext}" if original_ext else original_base
+
         sanitized_district = DriveService._sanitize_component(distrito)
+        sanitized_district = DriveService._localize_district_label(sanitized_district)
 
         components = [fecha_generacion]
         if sanitized_district:
@@ -530,6 +534,18 @@ class DriveService:
         if not sanitized:
             return ""
         return cls._enforce_max_length(sanitized)
+
+    @staticmethod
+    def _localize_district_label(value: str) -> str:
+        if not value:
+            return value
+
+        tokens = value.split("_")
+        normalized_tokens = [
+            "Distrito" if token.lower() == "district" else token
+            for token in tokens
+        ]
+        return "_".join(token for token in normalized_tokens if token)
 
     @staticmethod
     def _remove_duplicate_tokens(filename: str) -> str:
