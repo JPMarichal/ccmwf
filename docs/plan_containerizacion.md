@@ -77,3 +77,10 @@ Estabilizar la ejecución del servicio CCM mediante un entorno contenedorizado �
 - Script/entrypoint y configuraciones auxiliares para logs y healthchecks.  
 - Documentación operativa actualizada con símbolos de estado.  
 - Validación documentada de los endpoints de Telegram ejecutados dentro del contenedor contra la base MySQL real.
+
+## Seguimiento Issue 30 (Dockerfile base)
+- **✅ Dockerfile actualizado**: `src/docker/Dockerfile` ahora usa `python:3.13-slim`, instala `build-essential`, `default-libmysqlclient-dev`, `pkg-config`, `curl`, define `PYTHONPATH=/app/src` y copia el proyecto completo.
+- **✅ Dependencias Python ajustadas**: `src/requirements.txt` incluye `redis==5.0.4` y `mysqlclient==2.2.7`.
+- **✅ Build verificado**: `docker build -f src/docker/Dockerfile -t ccm-api:issue30 .` finaliza correctamente.
+- **✅ Ejecución básica**: `docker run --rm --env-file .env -p 8000:8000 ccm-api:issue30` expone Swagger (`/docs`) sin errores.
+- **ℹ️ Próximos pasos**: Issue 31 (docker-compose + redis), Issue 32 (entrypoint/healthchecks), Issue 33 (secretos) e Issue 34 (pruebas E2E).
