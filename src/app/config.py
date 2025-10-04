@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     ramas_autorizadas: List[int] = Field(default_factory=list)
     rama_actual: Optional[int] = None
 
+    # Telegram Notification Configuration (Fase 6)
+    telegram_enabled: bool = False
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    telegram_timeout_seconds: int = 15
+    telegram_channel_name: Optional[str] = None
+    telegram_channel_url: Optional[str] = None
+
     # Security
     secret_key: str = "change-this-secret-key-in-production"
 
@@ -139,6 +147,21 @@ class Settings(BaseSettings):
                 path = PROJECT_ROOT / path
 
             object.__setattr__(self, field_name, str(path))
+
+        if self.telegram_enabled:
+            missing_vars: list[str] = []
+
+            if not self.telegram_bot_token:
+                missing_vars.append('TELEGRAM_BOT_TOKEN')
+            if not self.telegram_chat_id:
+                missing_vars.append('TELEGRAM_CHAT_ID')
+
+            if missing_vars:
+                joined = ', '.join(missing_vars)
+                raise ValueError(
+                    'Faltan variables de entorno requeridas para Telegram: '
+                    f"{joined}. Configure las variables indicadas o desactive TELEGRAM_ENABLED."
+                )
 
 
 def get_settings() -> Settings:

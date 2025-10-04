@@ -32,7 +32,10 @@ Ambos archivos **no deben commitearse**; están listados en `.gitignore`.
 | `GOOGLE_DRIVE_CREDENTIALS_PATH` | Ruta a credenciales para integración con Google Drive |
 | `GOOGLE_DRIVE_TOKEN_PATH` | Ruta al token de Google Drive |
 | `DATABASE_URL` | Cadena de conexión a MySQL |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_IDS` | Configuración para notificaciones en Telegram |
+| `TELEGRAM_ENABLED` | Activa o desactiva por completo el servicio de notificaciones Telegram |
+| `TELEGRAM_BOT_TOKEN` | Token del bot generado por @BotFather |
+| `TELEGRAM_CHAT_ID` | Chat o canal destino (números negativos para canales) |
+| `TELEGRAM_TIMEOUT_SECONDS` | Tiempo máximo de espera de la petición HTTP a Telegram |
 | `SECRET_KEY` / `ENCRYPTION_KEY` | Claves para futuras características de seguridad |
 
 Estas variables pueden permanecer vacías hasta que se aborden las fases correspondientes.
