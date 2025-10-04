@@ -108,24 +108,29 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 **Objetivo**: Database Service organiza y prepara datos para generación de reportes
 
 **Actividades**:
-- ✅ **Consulta de rama específica**: Filtrado por variable de entorno
-- ✅ **Agrupación de datos**: Organización por zonas/distritos
-- ✅ **Cálculos adicionales**: Estadísticas y métricas necesarias
-- ⏳ **Cache de resultados**: Optimización para múltiples reportes
-- ⏳ **Validación de datos**: Verificación de completitud
-- ⏳ **Formateo inicial**: Preparación de estructuras de datos
-- ⏳ **Diseño con patrones**: Implementar fachada de preparación, estrategias de caché y plantillas reutilizables (Facade, Strategy, Template Method, Observer, Builder)
+- ✅ **Consulta de rama específica**: Filtrado automático según `RAMA_ACTUAL` y ramas permitidas
+- ✅ **Agrupación de datos multinivel**: Organización por zona/distrito replicando lógica de `scripts_google/ConsolidarReporte.gs.js`
+- ✅ **Cálculos adicionales**: Estadísticas derivadas y métricas de consolidado/Branch in a Glance
+- ✅ **Cache de resultados**: Estrategias `InMemoryCacheStrategy` y `RedisCacheStrategy` con métricas (`hits`, `misses`, `invalidations`)
+- ✅ **Validación de datos**: Reglas de consistencia (`invalid_total_missionaries`, `invalid_kpi_value`, `dataset_missing_rows`)
+- ✅ **Formateo inicial**: Serialización con DTOs Pydantic (`BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`)
+- ✅ **Diseño con patrones**: Fachada `ReportPreparationService`, Template Method en `BaseDatasetPipeline`, Builders y Observer para invalidación
 
 **Entregables**:
-- Dataset preparado para cada tipo de reporte
-- Estadísticas calculadas (conteos, promedios, etc.)
+- ✅ Servicio de datasets (`src/app/services/report_preparation_service.py`) expone pipelines reutilizables
+- ✅ DTOs/serializadores en `src/app/models.py` con `message_id` para trazabilidad
+- ✅ Capa de caché parametrizable con TTL y métricas de rendimiento
+- ✅ Validadores y logs estructurados en español (`etapa="fase_5_preparacion"`, `dataset_id`, `cache_metrics`, `message_id`)
+- ✅ Tests unitarios e integración (`tests/test_report_preparation_service.py`, `tests/integration/test_report_preparation_integration.py`) cubren casos exitosos y fallos
 
 **Recursos**:
-- Consultas SQL optimizadas
-- Sistema de cache (Redis opcional)
-- **Patrones de diseño**: Implementar fachada de preparación, estrategias de caché y plantillas reutilizables (Facade, Strategy, Template Method, Observer, Builder)
+- Consultas SQL optimizadas y vistas `vwMisioneros`, `vwFechasCCMPorDistrito`, `vwCumpleanosProximos`
+- Estrategias de caché configurables (memoria/Redis) según `.env`
+- Variables `.env`: `RAMA_ACTUAL`, `CACHE_PROVIDER`, `REPORT_CACHE_TTL_MINUTES`, `REDIS_URL`
+- Librerías: `sqlalchemy`, `pandas`, `redis` (opcional)
+- Patrones de diseño consolidados (Facade, Strategy, Template Method, Builder, Observer)
 
-- **Estado**: ✅ **Diseño de consultas completado**
+- **Estado**: ✅ **Fase completada (servicio de datasets listo para consumo de reportes)**
 
 ---
 
@@ -289,11 +294,11 @@ graph TD
 
 ## Próximos Pasos Inmediatos (ajustados tras Fase 4)
 
-1. **Semana 7-8**: Consolidar Fase 5 (datasets para reportes) y preparar reintentos/backoff.
-2. **Semana 9**: Implementar automatización diferida (encadenamiento Fase 3 → Fase 4) y pruebas de integración con MySQL real.
-3. **Semana 10**: Avanzar en generación de reportes (Fase 6-8) y plantillas.
-4. **Semana 11**: Habilitar monitoreo y alertas (Fase 9).
-5. **Semana 12**: Testing final, documentación y handoff.
+1. **Semana 8**: Profundizar en Fase 6 (Telegram) con endpoints dedicados y pruebas de envío.
+2. **Semana 9**: Activar Fase 7 (correo) con plantillas HTML definitivas y manejo de adjuntos.
+3. **Semana 10**: Completar Fase 8 (Google Sheets) con estructura Branch in a Glance y automatización de permisos.
+4. **Semana 11**: Encadenar fases 6-8 con Fase 5, habilitando invalidación de cachés y reintentos/backoff.
+5. **Semana 12**: Desarrollar Fase 9 (monitoreo, alertas y backups), pruebas finales y handoff.
 
 ## Métricas de Éxito
 
