@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     db_password: Optional[str] = None
     db_name: Optional[str] = None
 
+    # Cache Configuration (Fase 5)
+    cache_provider: str = "memory"
+    redis_url: Optional[str] = None
+    report_cache_ttl_minutes: int = 30
+
     # Security
     secret_key: str = "change-this-secret-key-in-production"
 

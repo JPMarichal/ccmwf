@@ -2,9 +2,9 @@
 Modelos de datos para el Email Service
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, Field, validator
 from enum import Enum
 
 
@@ -74,3 +74,83 @@ class EmailServiceStatus(BaseModel):
     last_check: datetime
     version: str = "1.0.0"
     uptime_seconds: Optional[int] = None
+
+
+class ReportDatasetMetadata(BaseModel):
+    """Metadatos que describen un dataset preparado para reportes."""
+
+    dataset_id: str
+    generated_at: datetime
+    record_count: int
+    branch_id: Optional[int] = None
+    duration_ms: Optional[int] = None
+    cache_hit: bool = False
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+    @validator('record_count')
+    def validate_record_count(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError('record_count must be non-negative')
+        return value
+
+
+class ReportDatasetResult(BaseModel):
+    """Resultado genérico de un dataset listo para consumo."""
+
+    metadata: ReportDatasetMetadata
+    data: List[Any]
+
+
+class BranchSummary(BaseModel):
+    """Resumen por rama/distrito para reportes ejecutivos."""
+
+    branch_id: int
+    district: str
+    first_generation_date: Optional[date] = None
+    first_ccm_arrival: Optional[date] = None
+    last_ccm_departure: Optional[date] = None
+    total_missionaries: int
+    total_companionships: Optional[int] = None
+    elders_count: Optional[int] = None
+    sisters_count: Optional[int] = None
+
+
+class DistrictKPI(BaseModel):
+    """Indicadores clave de desempeño por distrito."""
+
+    branch_id: int
+    district: str
+    metric: str
+    value: float
+    unit: Optional[str] = None
+    generated_for_week: Optional[date] = None
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class UpcomingArrival(BaseModel):
+    """Detalle de próximos ingresos de misioneros al CCM."""
+
+    district: str
+    rdistrict: Optional[str] = None
+    branch_id: Optional[int] = None
+    arrival_date: date
+    departure_date: Optional[date] = None
+    missionaries_count: int
+    duration_weeks: Optional[int] = None
+    status: Optional[str] = None
+
+
+class UpcomingBirthday(BaseModel):
+    """Registro de cumpleaños próximos para notificaciones y correos."""
+
+    missionary_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    district: Optional[str] = None
+    treatment: Optional[str] = None
+    missionary_name: str
+    birthday: date
+    age_turning: Optional[int] = None
+    status: Optional[str] = None
+    email_missionary: Optional[str] = None
+    email_personal: Optional[str] = None
+    three_weeks_program: Optional[bool] = None

@@ -20,7 +20,10 @@ ccmwf/
 │   │   └── services/
 │   │       ├── email_service.py
 │   │       ├── gmail_oauth_service.py
-│   │       └── database_sync_service.py
+│   │       ├── database_sync_service.py
+│   │       ├── report_preparation_service.py  # ✅ Fachada Facade/Template Method (Fase 5)
+│   │       ├── cache_strategies.py            # ✅ Estrategias Strategy (memoria/Redis)
+│   │       └── report_data_repository.py      # ✅ Acceso a vistas MySQL (SQLAlchemy)
 │   ├── tests/                 # Tests unitarios e integración
 │   ├── docker/                # Dockerfile y docker-compose.yml
 │   └── requirements.txt
@@ -57,6 +60,8 @@ docker-compose up --build
 # Tests unitarios
 python -m pytest tests/test_email_service.py -q
 python -m pytest tests/test_database_sync_service.py -q
+python -m pytest tests/test_report_preparation_service.py -q  # ✅ Cobertura pipelines Fase 5
+python -m pytest tests/integration/test_report_preparation_integration.py -q  # ✅ Integración repositorio/pipelines
 
 # Tests de integración
 python -m pytest tests/test_integration_flow.py -q
@@ -105,6 +110,8 @@ python -m pytest src/tests/test_database_sync_service.py -vv
   - **✅ Handlers separados**: `src/app/config.py` define `application.log`, `email_service.log`, `drive_service.log`, `database_sync.log` con rotación diaria (`backupCount=30`).
   - **✅ Formato JSON**: `structlog` produce `timestamp_utc` y se removieron emojis de mensajes.
   - **⚠️ Pruebas pendientes**: Añadir asserts en `tests/` para validar campos obligatorios y rotación durante Etapa 3.
+- **✅ Fase 5 - Preparación de reportes**: `report_preparation_service.py` utiliza Facade/Template Method; `cache_strategies.py` habilita Strategy (memoria/Redis); `report_data_repository.py` consulta vistas `vwFechasCCMPorDistrito`, `vwMisioneros`, `vwCumpleanosProximos`.
+- **✅ Tests Fase 5**: `tests/test_report_preparation_service.py` cubre casos exitosos, caché y errores (`dataset_missing_rows`, `invalid_total_missionaries`).
 - **Pruebas**: `tests/test_database_sync_service.py` cubre normalización y persistencia; utiliza mocks de Drive y SQLAlchemy.
 - **ℹ️ Zona ≡ Rama**: Durante la recepción de correos, solo se valida la columna `Distrito`; la zona se deriva de la rama correspondiente en etapas posteriores.
 
