@@ -1,3 +1,8 @@
+- ⚠️ Advertencia técnica: mientras `src/app/models.py` continúe con decoradores `@validator` (Pydantic V1), las ejecuciones de pruebas mostrarán `PydanticDeprecatedSince20`. Registrar el avance de la migración a `@field_validator` en las próximas revisiones.
+- **Reporte de preparación de datasets (Fase 5)**
+  - ℹ️ los servicios internos (`ReportPreparationService`) exponen endpoints FastAPI aún en diseño para la automatización de reportes. Las respuestas estructuradas incluyen metadatos `message_id`, `cache_hit`, `record_count` y códigos de validación (`invalid_branch`, `duplicate_records`, `missing_required_fields`, `stale_cache`, `invalid_total_missionaries`, `invalid_kpi_value`, `invalid_missionaries_count`, `dataset_missing_rows`).
+  - ⚠️ se debe documentar detalladamente cada endpoint cuando sea expuesto públicamente; por ahora el consumo es interno desde servicios y tareas programadas.
+
 # API Documentation - CCM Email Service
 
 ## Overview

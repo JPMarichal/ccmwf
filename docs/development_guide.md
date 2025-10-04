@@ -119,11 +119,14 @@ python -m pytest src/tests/test_database_sync_service.py -vv
 
 ## Fase 5 - Preparación de reportes (caché y pipelines)
 
-- **Fachada**: `ReportPreparationService` coordina los pipelines (`BranchSummaryPipeline`, `DistrictKPIPipeline`, `UpcomingArrivalPipeline`, `UpcomingBirthdayPipeline`) siguiendo Template Method. Cada pipeline valida datos (`invalid_total_missionaries`, `invalid_kpi_value`, `invalid_missionaries_count`, `dataset_missing_rows`) antes de serializar DTOs.
-- **Caché configurable**: `CacheStrategy` expone implementaciones `InMemoryCacheStrategy` y `RedisCacheStrategy`. Selecciona la estrategia mediante `.env` (`CACHE_PROVIDER`, `REDIS_URL`, `REPORT_CACHE_TTL_MINUTES`). TTL ≤ 0 desactiva el almacenamiento.
-- **Métricas y logging**: Cada estrategia registra métricas (`hits`, `misses`, `writes`, `invalidations`) y logs en español con `etapa="fase_5_preparacion"`. `ReportDatasetMetadata` incluye `message_id` único que se propaga a los logs (`pipeline_cache_hit`, `pipeline_cache_miss`, `pipeline_completed`).
-- **Consumo**: Los servicios de Fase 6-8 deben reutilizar los DTOs devueltos (`BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`) y consultar las métricas de caché cuando se requiera auditoría.
-- **Pruebas**: `tests/test_report_preparation_service.py` valida cache hits/misses y errores de datos; `tests/integration/test_report_preparation_integration.py` ejecuta consultas SQLite simulando MySQL. Ejecutar con `pytest tests/test_report_preparation_service.py` y `pytest tests/integration/test_report_preparation_integration.py` teniendo `PYTHONPATH` apuntando a `src/`.
+- **Fachada** ✅ `ReportPreparationService` coordina los pipelines (`BranchSummaryPipeline`, `DistrictKPIPipeline`, `UpcomingArrivalPipeline`, `UpcomingBirthdayPipeline`) siguiendo Template Method. Cada pipeline valida datos con códigos específicos: `invalid_total_missionaries`, `invalid_kpi_value`, `invalid_missionaries_count`, `dataset_missing_rows`, `missing_required_fields`, `duplicate_records`, `invalid_branch` y `stale_cache`.
+- **Caché configurable** ✅ `CacheStrategy` expone implementaciones `InMemoryCacheStrategy` y `RedisCacheStrategy`. Selecciona la estrategia mediante `.env` (`CACHE_PROVIDER`, `REDIS_URL`, `REPORT_CACHE_TTL_MINUTES`). TTL ≤ 0 desactiva el almacenamiento.
+- **Métricas y logging** ✅ Cada estrategia registra métricas (`hits`, `misses`, `writes`, `invalidations`) y logs en español con `etapa="fase_5_preparacion"`. `ReportDatasetMetadata` incluye `message_id` propagado en `pipeline_cache_hit`, `pipeline_cache_miss`, `pipeline_cache_stale` y `pipeline_completed`.
+- **Consumo** ✅ Los servicios de Fase 6-8 deben reutilizar los DTOs devueltos (`BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`) y consultar las métricas de caché para auditoría.
+- **Pruebas** ✅ `tests/test_report_preparation_service.py` cubre rutas felices, caché, duplicados y ramas inválidas; `tests/test_report_validations.py` concentra validaciones unitarias de pipelines; `tests/integration/test_report_preparation_integration.py` ejecuta consultas SQLite simulando MySQL. Ejecutar con `pytest tests/test_report_preparation_service.py tests/test_report_validations.py tests/integration/test_report_preparation_integration.py` teniendo `PYTHONPATH` apuntando a `src/`.
+
+### Advertencias y seguimiento
+- **⚠️ Deuda técnica pendiente**: Los modelos en `src/app/models.py` aún emplean decoradores `@validator` (Pydantic V1). Mientras no se migren a `@field_validator`, ejecución de tests mostrará advertencias `PydanticDeprecatedSince20`. Registrar avance de esta migración en próximas iteraciones.
 
 ## Handoff: Pasos recomendados
 

@@ -13,12 +13,15 @@ Registro de mediciones observadas durante las fases actuales del proyecto. Todas
 
 ## Fase 5 – Preparación de reportes
 - **Tiempo de preparación (pytest unitario)**: `5.93 s` al ejecutar `pytest tests/test_report_preparation_service.py` con `PYTHONPATH` apuntando a `src/` y caché in-memory (`CACHE_PROVIDER=memory`).
+- **Tiempo de pruebas de validaciones**: `2.40 s` al ejecutar `pytest tests/test_report_preparation_service.py tests/test_report_validations.py` (18 pruebas). Resultado incluye invalidaciones de caché al refrescar entradas obsoletas (`invalidations >= 1`).
 - **Tiempo de integración (SQLite stub)**: `1.58 s` al ejecutar `pytest tests/integration/test_report_preparation_integration.py` bajo el mismo entorno.
-- **Validación de caché**: Métricas (`hits`, `misses`, `writes`, `invalidations`) consultadas vía `ReportPreparationService._cache.get_metrics()` después de pruebas unitarias (resultado esperado tras dos consultas consecutivas: `{'hits': 1, 'misses': 1, 'writes': 1, 'invalidations': 0}`).
+- **Validación de caché**: Métricas (`hits`, `misses`, `writes`, `invalidations`) consultadas vía `ReportPreparationService._cache.get_metrics()`; cuando se fuerza expiración manual se espera al menos una invalidación antes del reproceso.
 - **Procedimiento de medición**:
   1. Activar virtualenv: `. .\.venv\Scripts\Activate.ps1`.
   2. Exportar `PYTHONPATH="d:/myapps/ccmwf/src"`.
   3. Ejecutar pruebas listadas y registrar duración reportada por pytest.
   4. Para Redis, repetir con `CACHE_PROVIDER=redis` y documentar latencias comparativas.
+
+> ⚠️ Observación: mientras `src/app/models.py` utilice decoradores `@validator` (Pydantic V1) las ejecuciones de pruebas reportarán `PydanticDeprecatedSince20`. Dar seguimiento en la migración a `@field_validator`.
 
 > Última actualización: 2025-10-04.
