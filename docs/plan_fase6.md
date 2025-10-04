@@ -32,6 +32,9 @@ Habilitar un servicio de notificaciones que distribuya por Telegram los reportes
 - **✅ Pruebas**: Unit tests para formateadores/adaptador, modulares para el servicio y `TestClient` para endpoints.
 - **✅ Documentación actualizada** (`docs/plan.md`, `docs/workflow.md`, `docs/development_guide.md`) con símbolos de estado y referencias cruzadas.
 
+## Avances recientes
+- **✅ Issue #22**: Cliente base de Telegram implementado en `src/app/services/telegram_client.py`, exportado en `src/app/services/__init__.py`, con pruebas (`src/tests/test_telegram_client.py`) y documentación (`docs/environment_variables.md`).
+
 ## Dependencias y Preparativos
 - **Datos**: Pipelines `upcoming_arrivals` y `upcoming_birthdays` provistos por Fase 5; vistas MySQL `vwMisioneros`, `vwCumpleanosProximos`.
 - **Variables de entorno**: Verificar presencia en `.env`; agregar antes de codificar si faltan.

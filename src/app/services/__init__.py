@@ -1,11 +1,24 @@
 """Servicios disponibles en la aplicación CCM."""
 
-from .database_sync_service import (  # noqa: F401
-    DatabaseSyncReport,
-    DatabaseSyncService,
-    DatabaseSyncStateRepository,
-    MissionaryRecord,
-)
+from .validators import TableValidationError, ValidationErrorDetail
+from .telegram_client import TelegramClient, TelegramSendResult
+
+__all__ = [
+    "EmailService",
+    "EmailContentUtils",
+    "DatabaseSyncService",
+    "DatabaseSyncStateRepository",
+    "MissionaryRecord",
+    "ValidationErrorDetail",
+    "DriveService",
+    "ReportDataRepository",
+    "ReportPreparationService",
+    "BaseCacheStrategy",
+    "InMemoryCacheStrategy",
+    "RedisCacheStrategy",
+    "TelegramClient",
+    "TelegramSendResult",
+]
 from .report_preparation_service import (  # noqa: F401
     BaseDatasetPipeline,
     BranchSummaryPipeline,
@@ -14,8 +27,6 @@ from .report_preparation_service import (  # noqa: F401
     ReportPreparationError,
     ReportPreparationService,
     UpcomingArrivalPipeline,
-    UpcomingBirthdayPipeline,
-    DistrictKPIPipeline,
 )
 from .cache_strategies import (  # noqa: F401
     CacheStrategy,
