@@ -294,29 +294,58 @@ class ReportPreparationService:
         self._cache_enabled = self._ttl_seconds > 0
         self._repository: ReportDataRepository = repository or SQLAlchemyReportDataRepository(self._settings)
 
-    def prepare_branch_summary(self, *, branch_id: Optional[int] = None, **params: Any) -> ReportDatasetResult:
-        return self._run_pipeline(BranchSummaryPipeline, branch_id, params)
+    def prepare_branch_summary(
+        self,
+        *,
+        branch_id: Optional[int] = None,
+        force_refresh: bool = False,
+        **params: Any,
+    ) -> ReportDatasetResult:
+        return self._run_pipeline(BranchSummaryPipeline, branch_id, params, skip_cache=force_refresh)
 
-    def prepare_district_kpis(self, *, branch_id: Optional[int] = None, **params: Any) -> ReportDatasetResult:
-        return self._run_pipeline(DistrictKPIPipeline, branch_id, params)
+    def prepare_district_kpis(
+        self,
+        *,
+        branch_id: Optional[int] = None,
+        force_refresh: bool = False,
+        **params: Any,
+    ) -> ReportDatasetResult:
+        return self._run_pipeline(DistrictKPIPipeline, branch_id, params, skip_cache=force_refresh)
 
-    def prepare_upcoming_arrivals(self, *, branch_id: Optional[int] = None, **params: Any) -> ReportDatasetResult:
-        return self._run_pipeline(UpcomingArrivalPipeline, branch_id, params)
+    def prepare_upcoming_arrivals(
+        self,
+        *,
+        branch_id: Optional[int] = None,
+        force_refresh: bool = False,
+        **params: Any,
+    ) -> ReportDatasetResult:
+        return self._run_pipeline(UpcomingArrivalPipeline, branch_id, params, skip_cache=force_refresh)
 
-    def prepare_upcoming_birthdays(self, *, branch_id: Optional[int] = None, **params: Any) -> ReportDatasetResult:
-        return self._run_pipeline(UpcomingBirthdayPipeline, branch_id, params)
+    def prepare_upcoming_birthdays(
+        self,
+        *,
+        branch_id: Optional[int] = None,
+        force_refresh: bool = False,
+        **params: Any,
+    ) -> ReportDatasetResult:
+        return self._run_pipeline(UpcomingBirthdayPipeline, branch_id, params, skip_cache=force_refresh)
 
     def _run_pipeline(
         self,
         pipeline_cls: Type[BaseDatasetPipeline],
         branch_id: Optional[int],
         params: Dict[str, Any],
+        *,
+        skip_cache: bool = False,
     ) -> ReportDatasetResult:
         request_message_id = uuid4().hex
         resolved_branch = self._resolve_branch(branch_id, pipeline_cls.dataset_id, request_message_id)
         pipeline = pipeline_cls(repository=self._repository, branch_id=resolved_branch, params=params)
         cache_key = self._build_cache_key(pipeline.dataset_id, resolved_branch, params)
-        cached = self._cache.get(cache_key) if self._cache_enabled else None
+        cached = None
+        if self._cache_enabled and not skip_cache:
+            cached = self._cache.get(cache_key)
+
         if cached:
             metadata = ReportDatasetMetadata(**cached["metadata"])  # type: ignore[arg-type]
             if self._is_cache_stale(metadata):
@@ -351,6 +380,9 @@ class ReportPreparationService:
                 )
                 return result
 
+        if skip_cache and self._cache_enabled:
+            self._cache.invalidate(cache_key)
+
         logger.info(
             "pipeline_cache_miss",
             etapa="fase_5_preparacion",
@@ -359,8 +391,10 @@ class ReportPreparationService:
             params=params,
             cache_key=cache_key,
             cache_hit=False,
+            cache_skip=skip_cache,
             message_id=request_message_id,
         )
+
         try:
             result = pipeline.prepare()
         except ReportDataRepositoryError as exc:

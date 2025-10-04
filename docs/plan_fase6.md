@@ -34,6 +34,7 @@ Habilitar un servicio de notificaciones que distribuya por Telegram los reportes
 
 ## Avances recientes
 - **✅ Issue #22**: Cliente base de Telegram implementado en `src/app/services/telegram_client.py`, exportado en `src/app/services/__init__.py`, con pruebas (`src/tests/test_telegram_client.py`) y documentación (`docs/environment_variables.md`).
+- **✅ Issue #23**: `TelegramNotificationService` con Template Method y formateadores específicos (`src/app/services/telegram_notification_service.py`), endpoints FastAPI (`/telegram/proximos-ingresos`, `/telegram/proximos-cumpleanos`, `/telegram/alerta`), pruebas unitarias e integración (`src/tests/test_telegram_notification_service.py`, `tests/integration/test_telegram_endpoints.py`).
 
 ## Dependencias y Preparativos
 - **Datos**: Pipelines `upcoming_arrivals` y `upcoming_birthdays` provistos por Fase 5; vistas MySQL `vwMisioneros`, `vwCumpleanosProximos`.
@@ -68,7 +69,7 @@ Habilitar un servicio de notificaciones que distribuya por Telegram los reportes
 - **Logs** con 100% de mensajes portando `message_id`, `telegram_chat_id` y `records_sent`.
 
 ## Checklist de Coordinación
-- ⚠️ Confirmar variables en `.env` antes de integrar código.
+- ✅ Confirmar variables en `.env` antes de integrar código.
 - ⚠️ Actualizar `docs/plan.md` y `docs/workflow.md` al cerrar subtareas.
-- ⚠️ Registrar avances con símbolos ✅/⚠️/ℹ️ en los reportes al usuario.
-- ⚠️ Mantener concordancia con `scripts_google/` hasta completar migración total.
+- ✅ Registrar avances con símbolos ✅/⚠️/ℹ️ en los reportes al usuario.
+- ✅ Mantener concordancia con `scripts_google/` hasta completar migración total.

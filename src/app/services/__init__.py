@@ -1,15 +1,16 @@
 """Servicios disponibles en la aplicación CCM."""
 
-from .validators import TableValidationError, ValidationErrorDetail
+from .validators import validate_email_structure, validate_table_structure
 from .telegram_client import TelegramClient, TelegramSendResult
+from .telegram_notification_service import TelegramNotificationService, TelegramNotificationResult
 
 __all__ = [
     "EmailService",
     "EmailContentUtils",
     "DatabaseSyncService",
     "DatabaseSyncStateRepository",
-    "MissionaryRecord",
-    "ValidationErrorDetail",
+    "validate_email_structure",
+    "validate_table_structure",
     "DriveService",
     "ReportDataRepository",
     "ReportPreparationService",
@@ -18,6 +19,8 @@ __all__ = [
     "RedisCacheStrategy",
     "TelegramClient",
     "TelegramSendResult",
+    "TelegramNotificationService",
+    "TelegramNotificationResult",
 ]
 from .report_preparation_service import (  # noqa: F401
     BaseDatasetPipeline,
