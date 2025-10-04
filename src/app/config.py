@@ -113,7 +113,7 @@ class Settings(BaseSettings):
 
     @field_validator('rama_actual', mode='before')
     def parse_rama_actual(cls, value: Any) -> Optional[int]:  # noqa: D401
-        """Convierte la rama actual configurada a entero"""
+        """Converts the configured current branch to an integer"""
         if value is None or value == "":
             return None
         return int(value)
