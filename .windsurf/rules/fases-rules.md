@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-Las fases 1-5 han sido completadas. Toma ahora como base los scripts de la carpeta /scripts_google como los scripts de google que deben ser emulados en las fases siguientes. Estos scripts ya realizaban con éxito muchas de las tareas que ahora deben desarrollarse en python. Deberás conocer bien esta carpeta y sus scripts para poder planificar los reportes.
+Las fases 1-6 han sido completadas. Toma ahora como base los scripts de la carpeta /scripts_google como los scripts de google que deben ser emulados en las fases siguientes. Estos scripts ya realizaban con éxito muchas de las tareas que ahora deben desarrollarse en python. Deberás conocer bien esta carpeta y sus scripts para poder planificar los reportes.
 
 Las credenciales y otros datos que anteriormente se tomaban de config.js, se deberán tomar de .env . No debe crearse .env.example.
 
