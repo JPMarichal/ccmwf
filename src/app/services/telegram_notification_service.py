@@ -47,6 +47,7 @@ class TelegramNotificationService:
         telegram_client: TelegramClient,
         max_attempts: int = 3,
         initial_backoff_seconds: float = 1.0,
+        max_backoff_seconds: float = 30.0,
     ) -> None:
         """Inicializa el orquestador de notificaciones hacia Telegram.
 
@@ -61,11 +62,15 @@ class TelegramNotificationService:
             initial_backoff_seconds: Intervalo inicial (en segundos) para la
                 estrategia de backoff exponencial entre reintentos. Se fuerza un
                 mínimo de 0.1 segundos.
+            max_backoff_seconds: Límite superior para el tiempo de espera entre
+                reintentos. Evita demoras excesivas ante múltiples fallos
+                consecutivos. Debe ser mayor a 0.1 segundos.
         """
         self._report_service = report_service
         self._client = telegram_client
         self._max_attempts = max(1, max_attempts)
         self._initial_backoff_seconds = max(0.1, initial_backoff_seconds)
+        self._max_backoff_seconds = max(0.1, max_backoff_seconds)
         self._logger = structlog.get_logger("telegram_service")
 
     # ------------------------------------------------------------------
@@ -305,7 +310,10 @@ class TelegramNotificationService:
             if result.success or not result.should_retry:
                 return result
             last_result = result
-            sleep_seconds = self._initial_backoff_seconds * (2 ** (attempt - 1))
+            sleep_seconds = min(
+                self._max_backoff_seconds,
+                self._initial_backoff_seconds * (2 ** (attempt - 1)),
+            )
             time.sleep(sleep_seconds)
 
         assert last_result is not None  # for mypy/static checkers
