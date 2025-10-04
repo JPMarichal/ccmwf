@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import uuid4
 from typing import Any, Dict, Iterable, List, Optional, Type
 
 import structlog
@@ -266,21 +267,31 @@ class ReportPreparationService:
             metadata = ReportDatasetMetadata(**cached["metadata"])  # type: ignore[arg-type]
             metadata.cache_hit = True
             result = ReportDatasetResult(metadata=metadata, data=cached["data"])
+            cache_metrics = self._cache.get_metrics()
             logger.info(
                 "pipeline_cache_hit",
                 etapa="fase_5_preparacion",
                 dataset_id=pipeline.dataset_id,
                 branch_id=resolved_branch,
                 cache_key=cache_key,
+                cache_hit=True,
+                records_processed=metadata.record_count,
+                duration_ms=metadata.duration_ms,
+                cache_metrics=cache_metrics,
+                message_id=metadata.message_id,
             )
             return result
 
+        message_id = uuid4().hex
         logger.info(
-            "pipeline_started",
+            "pipeline_cache_miss",
             etapa="fase_5_preparacion",
             dataset_id=pipeline.dataset_id,
             branch_id=resolved_branch,
             params=params,
+            cache_key=cache_key,
+            cache_hit=False,
+            message_id=message_id,
         )
         try:
             result = pipeline.prepare()
@@ -313,6 +324,7 @@ class ReportPreparationService:
             )
             raise ReportPreparationError(str(exc)) from exc
 
+        result.metadata.message_id = message_id
         logger.info(
             "pipeline_completed",
             etapa="fase_5_preparacion",
@@ -320,6 +332,10 @@ class ReportPreparationService:
             branch_id=resolved_branch,
             record_count=result.metadata.record_count,
             duration_ms=result.metadata.duration_ms,
+            cache_hit=False,
+            cache_key=cache_key,
+            cache_metrics=self._cache.get_metrics(),
+            message_id=message_id,
         )
         self._cache.set(
             cache_key,

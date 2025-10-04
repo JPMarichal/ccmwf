@@ -157,6 +157,46 @@ def test_cache_hit_on_second_call():
     assert second.metadata.record_count == 1
 
 
+def test_cache_metrics_track_usage():
+    """✅ Registra métricas de caché para auditoría (`docs/plan_fase5.md`)."""
+
+    repository = StubRepository(
+        branch_summary_rows=[
+            {
+                "branch_id": 14,
+                "district": "Distrito 5",
+                "first_generation_date": None,
+                "first_ccm_arrival": None,
+                "last_ccm_departure": None,
+                "total_missionaries": 9,
+                "total_companionships": None,
+                "elders_count": None,
+                "sisters_count": None,
+            }
+        ],
+        district_kpis_rows=[],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    first = service.prepare_branch_summary()
+    metrics_after_first = service._cache.get_metrics()
+
+    assert first.metadata.cache_hit is False
+    assert metrics_after_first["misses"] == 1
+    assert metrics_after_first["writes"] == 1
+
+    second = service.prepare_branch_summary()
+    metrics_after_second = service._cache.get_metrics()
+
+    assert second.metadata.cache_hit is True
+    assert metrics_after_second["hits"] == 1
+    assert metrics_after_second["misses"] == 1
+    assert metrics_after_second["writes"] == 1
+
+
 def test_upcoming_arrivals_negative_count():
     """Controla escenarios inválidos para reportes de Telegram/Messenger."""
     # Requisito: Logs de errores con códigos específicos al detectar datos incorrectos (`docs/plan_fase5.md`).

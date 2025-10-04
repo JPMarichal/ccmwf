@@ -3,6 +3,7 @@ Modelos de datos para el Email Service
 """
 
 from datetime import date, datetime
+from uuid import uuid4
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, validator
 from enum import Enum
@@ -86,6 +87,7 @@ class ReportDatasetMetadata(BaseModel):
     duration_ms: Optional[int] = None
     cache_hit: bool = False
     parameters: Dict[str, Any] = Field(default_factory=dict)
+    message_id: str = Field(default_factory=lambda: uuid4().hex)
 
     @validator('record_count')
     def validate_record_count(cls, value: int) -> int:

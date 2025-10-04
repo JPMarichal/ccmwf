@@ -11,4 +11,14 @@ Registro de mediciones observadas durante las fases actuales del proyecto. Todas
 - **Cobertura módulos de parsing/validación**: `>=94%` (`email_html_parser.py`, `email_content_utils.py`, `validators.py`) según último reporte de cobertura (`pytest ... --cov=src`).
 - **Logging estructurado**: se registran `table_errors`, `validation_errors` y `extra_texts` en cada resultado; tiempos de parsing disponibles para instrumentación futura (pendiente de habilitar en logs de producción).
 
-> Última actualización: 2025-10-01.
+## Fase 5 – Preparación de reportes
+- **Tiempo de preparación (pytest unitario)**: `5.93 s` al ejecutar `pytest tests/test_report_preparation_service.py` con `PYTHONPATH` apuntando a `src/` y caché in-memory (`CACHE_PROVIDER=memory`).
+- **Tiempo de integración (SQLite stub)**: `1.58 s` al ejecutar `pytest tests/integration/test_report_preparation_integration.py` bajo el mismo entorno.
+- **Validación de caché**: Métricas (`hits`, `misses`, `writes`, `invalidations`) consultadas vía `ReportPreparationService._cache.get_metrics()` después de pruebas unitarias (resultado esperado tras dos consultas consecutivas: `{'hits': 1, 'misses': 1, 'writes': 1, 'invalidations': 0}`).
+- **Procedimiento de medición**:
+  1. Activar virtualenv: `. .\.venv\Scripts\Activate.ps1`.
+  2. Exportar `PYTHONPATH="d:/myapps/ccmwf/src"`.
+  3. Ejecutar pruebas listadas y registrar duración reportada por pytest.
+  4. Para Redis, repetir con `CACHE_PROVIDER=redis` y documentar latencias comparativas.
+
+> Última actualización: 2025-10-04.

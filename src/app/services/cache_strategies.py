@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, Optional
 
 import structlog
@@ -16,6 +17,19 @@ try:  # pragma: no cover - import opcional
     import redis  # type: ignore
 except ImportError:  # pragma: no cover - redis es opcional
     redis = None  # type: ignore
+
+
+@dataclass
+class CacheMetrics:
+    """Métricas básicas de uso de caché."""
+
+    hits: int = 0
+    misses: int = 0
+    writes: int = 0
+    invalidations: int = 0
+
+    def to_dict(self) -> Dict[str, int]:
+        return asdict(self)
 
 
 class CacheStrategy(ABC):
@@ -37,6 +51,10 @@ class CacheStrategy(ABC):
         """Invalidar todos los elementos cuyo key inicie con el prefijo dado."""
         raise NotImplementedError
 
+    @abstractmethod
+    def get_metrics(self) -> Dict[str, int]:
+        raise NotImplementedError
+
 
 class InMemoryCacheStrategy(CacheStrategy):
     """Estrategia de caché en memoria con TTL simple."""
@@ -45,6 +63,7 @@ class InMemoryCacheStrategy(CacheStrategy):
         self._store: Dict[str, Dict[str, Any]] = {}
         self._expirations: Dict[str, float] = {}
         self._lock = threading.Lock()
+        self._metrics = CacheMetrics()
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -52,27 +71,44 @@ class InMemoryCacheStrategy(CacheStrategy):
             if expires_at and expires_at < time.time():
                 self._store.pop(key, None)
                 self._expirations.pop(key, None)
+                self._metrics.misses += 1
+                logger.debug(
+                    "cache_expirada_memoria",
+                    etapa="fase_5_preparacion",
+                    clave=key,
+                )
                 return None
+
             value = self._store.get(key)
             if value is not None:
+                self._metrics.hits += 1
                 logger.debug("cache_hit_memoria", etapa="fase_5_preparacion", clave=key)
-            return value
+                return value
+
+            self._metrics.misses += 1
+            logger.debug("cache_fallo_memoria", etapa="fase_5_preparacion", clave=key)
+            return None
 
     def set(self, key: str, value: Dict[str, Any], ttl_seconds: Optional[int] = None) -> None:
         if ttl_seconds is not None and ttl_seconds <= 0:
+            logger.debug("cache_descartada_memoria", etapa="fase_5_preparacion", clave=key, ttl=ttl_seconds)
             return
+
         with self._lock:
             self._store[key] = value
             if ttl_seconds:
                 self._expirations[key] = time.time() + ttl_seconds
             else:
                 self._expirations.pop(key, None)
+            self._metrics.writes += 1
             logger.debug("cache_guardada_memoria", etapa="fase_5_preparacion", clave=key, ttl=ttl_seconds)
 
     def invalidate(self, key: str) -> None:
         with self._lock:
-            self._store.pop(key, None)
+            removed = self._store.pop(key, None)
             self._expirations.pop(key, None)
+            if removed is not None:
+                self._metrics.invalidations += 1
             logger.debug("cache_invalidada_memoria", etapa="fase_5_preparacion", clave=key)
 
     def invalidate_prefix(self, prefix: str) -> None:
@@ -82,7 +118,17 @@ class InMemoryCacheStrategy(CacheStrategy):
                 self._store.pop(key, None)
                 self._expirations.pop(key, None)
             if keys:
-                logger.debug("cache_invalidada_prefijo_memoria", etapa="fase_5_preparacion", prefijo=prefix, total=len(keys))
+                self._metrics.invalidations += len(keys)
+                logger.debug(
+                    "cache_invalidada_prefijo_memoria",
+                    etapa="fase_5_preparacion",
+                    prefijo=prefix,
+                    total=len(keys),
+                )
+
+    def get_metrics(self) -> Dict[str, int]:
+        with self._lock:
+            return dict(self._metrics.to_dict())
 
 
 class RedisCacheStrategy(CacheStrategy):
@@ -92,39 +138,70 @@ class RedisCacheStrategy(CacheStrategy):
         if not redis:  # pragma: no cover - dependiente de import opcional
             raise RuntimeError("redis no está instalado. Instálalo para usar RedisCacheStrategy")
         self._client = redis.Redis.from_url(redis_url, decode_responses=True)
+        self._metrics = CacheMetrics()
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         payload = self._client.get(key)
         if payload is None:
+            with self._lock:
+                self._metrics.misses += 1
+            logger.debug("cache_fallo_redis", etapa="fase_5_preparacion", clave=key)
             return None
         try:
             value = json.loads(payload)
-            logger.debug("cache_hit_redis", etapa="fase_5_preparacion", clave=key)
-            return value
         except json.JSONDecodeError:  # pragma: no cover - datos corruptos
             self.invalidate(key)
+            logger.warning(
+                "cache_payload_invalido_redis",
+                etapa="fase_5_preparacion",
+                clave=key,
+            )
             return None
+
+        with self._lock:
+            self._metrics.hits += 1
+        logger.debug("cache_hit_redis", etapa="fase_5_preparacion", clave=key)
+        return value
 
     def set(self, key: str, value: Dict[str, Any], ttl_seconds: Optional[int] = None) -> None:
         if ttl_seconds is not None and ttl_seconds <= 0:
+            logger.debug("cache_descartada_redis", etapa="fase_5_preparacion", clave=key, ttl=ttl_seconds)
             return
+
         payload = json.dumps(value, default=str)
         if ttl_seconds:
             self._client.setex(key, ttl_seconds, payload)
         else:
             self._client.set(key, payload)
+        with self._lock:
+            self._metrics.writes += 1
         logger.debug("cache_guardada_redis", etapa="fase_5_preparacion", clave=key, ttl=ttl_seconds)
 
     def invalidate(self, key: str) -> None:
         self._client.delete(key)
+        with self._lock:
+            self._metrics.invalidations += 1
         logger.debug("cache_invalidada_redis", etapa="fase_5_preparacion", clave=key)
 
     def invalidate_prefix(self, prefix: str) -> None:
         pattern = f"{prefix}*"
         keys = list(self._client.scan_iter(match=pattern))
-        if keys:
-            self._client.delete(*keys)
-            logger.debug("cache_invalidada_prefijo_redis", etapa="fase_5_preparacion", prefijo=prefix, total=len(keys))
+        if not keys:
+            return
+        self._client.delete(*keys)
+        with self._lock:
+            self._metrics.invalidations += len(keys)
+        logger.debug(
+            "cache_invalidada_prefijo_redis",
+            etapa="fase_5_preparacion",
+            prefijo=prefix,
+            total=len(keys),
+        )
+
+    def get_metrics(self) -> Dict[str, int]:
+        with self._lock:
+            return dict(self._metrics.to_dict())
 
 
 def create_cache_strategy(settings: Any) -> CacheStrategy:
@@ -144,6 +221,6 @@ def create_cache_strategy(settings: Any) -> CacheStrategy:
             "cache_provider_desconocido",
             etapa="fase_5_preparacion",
             provider=provider,
-            accion="se usa memoria"
+            accion="se usa memoria",
         )
     return InMemoryCacheStrategy()
