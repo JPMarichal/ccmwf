@@ -33,6 +33,10 @@ class ReportPreparationError(Exception):
 class DatasetValidationError(ReportPreparationError):
     """Errores de validación específicos de datasets."""
 
+    def __init__(self, message: str, *, error_code: str = "validation_error") -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
 
 class BaseDatasetPipeline:
     """Plantilla base para preparar datasets reutilizables."""
@@ -40,6 +44,7 @@ class BaseDatasetPipeline:
     dataset_id: str = "base_dataset"
 
     required_fields: Iterable[str] = ()
+    allow_empty: bool = False
 
     def __init__(
         self,
@@ -56,7 +61,9 @@ class BaseDatasetPipeline:
     def prepare(self) -> ReportDatasetResult:
         start = datetime.utcnow()
         raw_rows = list(self._load())
+        self._ensure_not_empty(raw_rows, stage="load")
         cleaned = list(self._validate(raw_rows))
+        self._ensure_not_empty(cleaned, stage="validate")
         transformed = list(self._transform(cleaned))
         result = self._serialize(transformed)
         metadata = ReportDatasetMetadata(
@@ -99,6 +106,14 @@ class BaseDatasetPipeline:
                 serialized.append(row)
         return serialized
 
+    def _ensure_not_empty(self, rows: List[Dict[str, Any]], *, stage: str) -> None:
+        if rows or self.allow_empty:
+            return
+        raise DatasetValidationError(
+            f"El dataset '{self.dataset_id}' no produjo resultados durante la etapa {stage}",
+            error_code="dataset_missing_rows",
+        )
+
 
 class BranchSummaryPipeline(BaseDatasetPipeline):
     dataset_id = "branch_summary"
@@ -107,6 +122,7 @@ class BranchSummaryPipeline(BaseDatasetPipeline):
         "district",
         "total_missionaries",
     )
+    allow_empty = False
 
     def _load(self) -> Iterable[Dict[str, Any]]:
         return self.repository.fetch_branch_summary(self.branch_id, self.params)
@@ -114,6 +130,17 @@ class BranchSummaryPipeline(BaseDatasetPipeline):
     def _transform(self, rows: Iterable[Dict[str, Any]]) -> Iterable[BranchSummary]:
         for row in rows:
             yield BranchSummary(**row)
+
+    def _validate(self, rows: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
+        validated = list(super()._validate(rows))
+        for index, row in enumerate(validated):
+            total = row.get("total_missionaries")
+            if total is not None and total < 0:
+                raise DatasetValidationError(
+                    f"Total de misioneros negativo en registro {index} del dataset {self.dataset_id}",
+                    error_code="invalid_total_missionaries",
+                )
+        return validated
 
 
 class DistrictKPIPipeline(BaseDatasetPipeline):
@@ -124,6 +151,7 @@ class DistrictKPIPipeline(BaseDatasetPipeline):
         "metric",
         "value",
     )
+    allow_empty = False
 
     def _load(self) -> Iterable[Dict[str, Any]]:
         return self.repository.fetch_district_kpis(self.branch_id, self.params)
@@ -131,6 +159,17 @@ class DistrictKPIPipeline(BaseDatasetPipeline):
     def _transform(self, rows: Iterable[Dict[str, Any]]) -> Iterable[DistrictKPI]:
         for row in rows:
             yield DistrictKPI(**row)
+
+    def _validate(self, rows: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
+        validated = list(super()._validate(rows))
+        for index, row in enumerate(validated):
+            value = row.get("value")
+            if value is not None and value < 0:
+                raise DatasetValidationError(
+                    f"Valor negativo en KPI '{row.get('metric')}' en registro {index}",
+                    error_code="invalid_kpi_value",
+                )
+        return validated
 
 
 class UpcomingArrivalPipeline(BaseDatasetPipeline):
@@ -140,6 +179,7 @@ class UpcomingArrivalPipeline(BaseDatasetPipeline):
         "arrival_date",
         "missionaries_count",
     )
+    allow_empty = True
 
     def _load(self) -> Iterable[Dict[str, Any]]:
         return self.repository.fetch_upcoming_arrivals(self.branch_id, self.params)
@@ -148,6 +188,17 @@ class UpcomingArrivalPipeline(BaseDatasetPipeline):
         for row in rows:
             yield UpcomingArrival(**row)
 
+    def _validate(self, rows: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
+        validated = list(super()._validate(rows))
+        for index, row in enumerate(validated):
+            count = row.get("missionaries_count")
+            if count is not None and count < 0:
+                raise DatasetValidationError(
+                    f"Conteo negativo de misioneros en registro {index}",
+                    error_code="invalid_missionaries_count",
+                )
+        return validated
+
 
 class UpcomingBirthdayPipeline(BaseDatasetPipeline):
     dataset_id = "upcoming_birthdays"
@@ -155,6 +206,7 @@ class UpcomingBirthdayPipeline(BaseDatasetPipeline):
         "missionary_name",
         "birthday",
     )
+    allow_empty = True
 
     def _load(self) -> Iterable[Dict[str, Any]]:
         return self.repository.fetch_upcoming_birthdays(self.branch_id, self.params)
@@ -247,6 +299,7 @@ class ReportPreparationService:
                 etapa="fase_5_preparacion",
                 dataset_id=pipeline.dataset_id,
                 branch_id=resolved_branch,
+                error_code=exc.error_code,
                 error=str(exc),
             )
             raise
