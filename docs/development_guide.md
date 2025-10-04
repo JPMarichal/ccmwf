@@ -61,6 +61,7 @@ docker-compose up --build
 python -m pytest tests/test_email_service.py -q
 python -m pytest tests/test_database_sync_service.py -q
 python -m pytest tests/test_report_preparation_service.py -q  # ✅ Cobertura pipelines Fase 5
+python -m pytest tests/integration/test_report_preparation_integration.py -q  # ✅ Integración repositorio/pipelines
 
 # Tests de integración
 python -m pytest tests/test_integration_flow.py -q

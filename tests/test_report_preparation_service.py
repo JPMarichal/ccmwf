@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 import pytest
@@ -168,8 +169,8 @@ def test_upcoming_arrivals_negative_count():
                 "district": "Distrito 3",
                 "rdistrict": "R-3",
                 "branch_id": 14,
-                "arrival_date": None,
-                "departure_date": None,
+                "arrival_date": date.today(),
+                "departure_date": date.today() + timedelta(weeks=6),
                 "missionaries_count": -1,
                 "duration_weeks": 6,
                 "status": None,
