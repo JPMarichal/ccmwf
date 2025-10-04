@@ -219,7 +219,29 @@ def create_cache_strategy(settings: Any) -> CacheStrategy:
         redis_url = getattr(settings, "redis_url", None)
         if not redis_url:
             raise ValueError("redis_url es requerido cuando cache_provider=redis")
-        return RedisCacheStrategy(redis_url)
+
+        if redis is None:
+            logger.warning(
+                "cache_provider_redis_no_disponible",
+                etapa="fase_5_preparacion",
+                provider=provider,
+                accion="fallback_memoria",
+                causa="dependencia_no_instalada",
+            )
+            return InMemoryCacheStrategy()
+
+        try:
+            return RedisCacheStrategy(redis_url)
+        except RuntimeError as exc:  # pragma: no cover - solo si redis falla en runtime
+            logger.warning(
+                "cache_provider_redis_fallo",
+                etapa="fase_5_preparacion",
+                provider=provider,
+                accion="fallback_memoria",
+                redis_url=redis_url,
+                error=str(exc),
+            )
+            return InMemoryCacheStrategy()
 
     if provider != "memory":
         logger.warning(
