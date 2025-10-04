@@ -48,6 +48,20 @@ class TelegramNotificationService:
         max_attempts: int = 3,
         initial_backoff_seconds: float = 1.0,
     ) -> None:
+        """Inicializa el orquestador de notificaciones hacia Telegram.
+
+        Args:
+            report_service: Fachada que provee los datasets (`UpcomingArrival`,
+                `UpcomingBirthday`, etc.) reutilizados por las notificaciones.
+            telegram_client: Cliente HTTP encargado de ejecutar los envíos hacia
+                la API de Telegram. Debe tener configuradas las credenciales y
+                el chat objetivo.
+            max_attempts: Número máximo de intentos por mensaje cuando la API
+                responde con condiciones recuperables. Se fuerza un mínimo de 1.
+            initial_backoff_seconds: Intervalo inicial (en segundos) para la
+                estrategia de backoff exponencial entre reintentos. Se fuerza un
+                mínimo de 0.1 segundos.
+        """
         self._report_service = report_service
         self._client = telegram_client
         self._max_attempts = max(1, max_attempts)
