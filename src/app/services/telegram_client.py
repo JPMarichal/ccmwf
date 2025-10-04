@@ -48,10 +48,11 @@ class TelegramClient:
         transport: Optional[httpx.BaseTransport] = None,
         logger: Optional[structlog.stdlib.BoundLogger] = None,
     ) -> None:
-        if not bot_token:
-            raise ValueError("Se requiere bot_token para inicializar TelegramClient")
-        if not chat_id:
-            raise ValueError("Se requiere chat_id para inicializar TelegramClient")
+        if enabled:
+            if not bot_token:
+                raise ValueError("Se requiere bot_token para inicializar TelegramClient")
+            if not chat_id:
+                raise ValueError("Se requiere chat_id para inicializar TelegramClient")
 
         self._bot_token = bot_token
         self._chat_id = chat_id
@@ -59,7 +60,19 @@ class TelegramClient:
         self._timeout_seconds = timeout_seconds
         self._transport = transport
         self._logger = logger or structlog.get_logger("telegram_service")
-        self._send_endpoint = f"/bot{self._bot_token}/sendMessage"
+        self._send_endpoint = f"/bot{self._bot_token}/sendMessage" if self._bot_token else ""
+
+    @property
+    def enabled(self) -> bool:
+        """Indica si el cliente tiene habilitadas las notificaciones."""
+
+        return self._enabled
+
+    @property
+    def chat_id(self) -> str:
+        """Chat o canal configurado para los envíos."""
+
+        return self._chat_id
 
     def send_message(
         self,

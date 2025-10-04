@@ -3,7 +3,10 @@ Email Service - Fase 1 del Proyecto CCM
 Servicio para recepción y procesamiento de correos de misioneros
 """
 
-from fastapi import FastAPI, HTTPException
+from dataclasses import asdict
+from typing import Optional
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
 from contextlib import asynccontextmanager
@@ -12,22 +15,27 @@ from pydantic import BaseModel, Field
 
 from app.config import configure_logging, get_settings
 from app.logging_utils import ensure_log_context, bind_log_context
-from app.services.email_service import EmailService
-from app.services.drive_service import DriveService
 from app.services.database_sync_service import DatabaseSyncService
+from app.services.drive_service import DriveService
+from app.services.email_service import EmailService
+from app.services.report_preparation_service import ReportPreparationService
+from app.services.telegram_client import TelegramClient
+from app.services.telegram_notification_service import (
+    TelegramNotificationResult,
+    TelegramNotificationService,
+)
 
-# Configurar logger
-logger = structlog.get_logger("app").bind(servicio="app")
 
-# Estado global de la aplicación
-email_service = None
-drive_service = None
-database_sync_service = None
+email_service: Optional[EmailService] = None
+drive_service: Optional[DriveService] = None
+database_sync_service: Optional[DatabaseSyncService] = None
+report_preparation_service: Optional[ReportPreparationService] = None
+telegram_notification_service: Optional[TelegramNotificationService] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Configuración del ciclo de vida de la aplicación"""
-    global email_service, drive_service, database_sync_service
+    global email_service, drive_service, database_sync_service, report_preparation_service, telegram_notification_service
 
     settings = get_settings()
     configure_logging(settings)
@@ -39,6 +47,17 @@ async def lifespan(app: FastAPI):
     drive_service = DriveService(settings)
     email_service = EmailService(settings, drive_service=drive_service)
     database_sync_service = DatabaseSyncService(settings, drive_service)
+    report_preparation_service = ReportPreparationService()
+    telegram_client = TelegramClient(
+        bot_token=settings.telegram_bot_token or "",
+        chat_id=settings.telegram_chat_id or "",
+        enabled=settings.telegram_enabled,
+        timeout_seconds=settings.telegram_timeout_seconds,
+    )
+    telegram_notification_service = TelegramNotificationService(
+        report_service=report_preparation_service,
+        telegram_client=telegram_client,
+    )
 
     # Test de conexión durante startup
     try:
@@ -57,6 +76,9 @@ async def lifespan(app: FastAPI):
         await email_service.close()
     if drive_service:
         drive_service.close()
+
+    report_preparation_service = None
+    telegram_notification_service = None
 
 # Crear aplicación FastAPI
 app = FastAPI(
@@ -85,6 +107,42 @@ class DatabaseSyncRequest(BaseModel):
 class DatabaseSyncResponse(BaseModel):
     success: bool
     report: dict
+
+
+class TelegramReportRequest(BaseModel):
+    branch_id: int | None = Field(default=None, description="Identificador de rama autorizado")
+    force_refresh: bool = Field(default=False, description="Forzar regeneración de dataset ignorando caché")
+    days_ahead: int = Field(default=60, ge=1, le=180, description="Ventana temporal máxima en días")
+
+
+class TelegramBirthdayReportRequest(TelegramReportRequest):
+    days_ahead: int = Field(default=90, ge=1, le=365, description="Ventana temporal para cumpleaños")
+
+
+class TelegramAlertRequest(BaseModel):
+    title: str = Field(..., description="Título o encabezado de la alerta")
+    body: str = Field(..., description="Contenido del mensaje")
+    level: str = Field(
+        default="info",
+        pattern="^(info|warning|error|success)$",
+        description="Severidad de la alerta",
+    )
+    branch_id: int | None = Field(default=None, description="Rama asociada (opcional)")
+
+
+class TelegramReportResponse(BaseModel):
+    success: bool
+    telegram_message_id: int | None
+    records_sent: int
+    status_code: int
+    duration_ms: int
+    dataset_id: str | None
+    dataset_records: int
+    dataset_duration_ms: int | None
+    message_id: str
+    error_code: str | None
+    error_description: str | None
+    raw_response: dict | None = None
 
 @app.get("/")
 async def root():
@@ -183,6 +241,61 @@ def extraccion_generacion(payload: DatabaseSyncRequest):
         force=payload.force,
     )
     return DatabaseSyncResponse(success=True, report=report.to_dict())
+
+
+def _ensure_telegram_service_available() -> TelegramNotificationService:
+    if telegram_notification_service is None:
+        raise HTTPException(status_code=503, detail="Servicio de notificaciones Telegram no disponible")
+    return telegram_notification_service
+
+
+def _build_telegram_response(result: TelegramNotificationResult) -> TelegramReportResponse:
+    data = asdict(result)
+    return TelegramReportResponse(**data)
+
+
+def get_telegram_service() -> TelegramNotificationService:
+    return _ensure_telegram_service_available()
+
+
+@app.post("/telegram/proximos-ingresos", response_model=TelegramReportResponse)
+def telegram_proximos_ingresos(
+    payload: TelegramReportRequest,
+    service: TelegramNotificationService = Depends(get_telegram_service),
+) -> TelegramReportResponse:
+    result = service.send_upcoming_arrivals(
+        branch_id=payload.branch_id,
+        force_refresh=payload.force_refresh,
+        days_ahead=payload.days_ahead,
+    )
+    return _build_telegram_response(result)
+
+
+@app.post("/telegram/proximos-cumpleanos", response_model=TelegramReportResponse)
+def telegram_proximos_cumpleanos(
+    payload: TelegramBirthdayReportRequest,
+    service: TelegramNotificationService = Depends(get_telegram_service),
+) -> TelegramReportResponse:
+    result = service.send_upcoming_birthdays(
+        branch_id=payload.branch_id,
+        force_refresh=payload.force_refresh,
+        days_ahead=payload.days_ahead,
+    )
+    return _build_telegram_response(result)
+
+
+@app.post("/telegram/alerta", response_model=TelegramReportResponse)
+def telegram_alerta(
+    payload: TelegramAlertRequest,
+    service: TelegramNotificationService = Depends(get_telegram_service),
+) -> TelegramReportResponse:
+    result = service.send_alert(
+        title=payload.title,
+        body=payload.body,
+        level=payload.level,
+        branch_id=payload.branch_id,
+    )
+    return _build_telegram_response(result)
 
 if __name__ == "__main__":
     import uvicorn

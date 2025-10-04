@@ -135,21 +135,21 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 ---
 
 ### Fase 6: Generación de Reportes por Telegram
-**Objetivo**: Report Service envía notificaciones push automáticas
-{{ ... }}
+**Objetivo**: Report Service envía notificaciones push automáticas reutilizando los datasets de Fase 5
+
 **Actividades**:
-- ✅ **Configuración de bot**: Token y credenciales de Telegram
-- ✅ **Formateo de mensaje**: Estructura de notificación clara
-- ⏳ **Identificación de destinatarios**: Lista de chats/grupos
-- ⏳ **Envío de notificaciones**: Mensajes push automáticos
-- ⏳ **Manejo de respuestas**: Posible interacción básica
-- ⏳ **Logging de envíos**: Registro de mensajes enviados
+- ✅ **Configuración de bot**: Token y credenciales de Telegram cargadas desde `.env`
+- ✅ **Formateo de mensaje**: Formateadores HTML implementados en `TelegramNotificationService`
+- ℹ️ **Identificación de destinatarios**: Validar lista final de chats/grupos (actualmente se usa `TELEGRAM_CHAT_ID` principal)
+- ✅ **Envío de notificaciones**: Endpoints `/telegram/proximos-ingresos`, `/telegram/proximos-cumpleanos`, `/telegram/alerta` operativos
+- ⏳ **Manejo de respuestas**: Posible interacción básica pendiente
+- ✅ **Logging de envíos**: Logs estructurados `etapa="fase_6_telegram"` en servicio y cliente
 
 **Entregables**:
-- Mensajes enviados exitosamente
-- Notificaciones de distritos que llegan
-- Alertas de próximos cumpleaños
-- Log de interacciones
+- ✅ Servicio `TelegramNotificationService` con Template Method y reintentos
+- ✅ Endpoints FastAPI publicados y cubiertos con pruebas (`tests/integration/test_telegram_endpoints.py`)
+- ✅ Mensajes para próximos ingresos/cumpleaños y alertas con manejo de datasets vacíos
+- ⚠️ Log de interacciones entrantes (para respuestas) pendiente
 
 **Recursos**:
 - Telegram Bot API (`python-telegram-bot`)

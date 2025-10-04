@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Pruebas unitarias para `ReportPreparationService` y pipelines de Fase 5."""
 
 from dataclasses import dataclass
