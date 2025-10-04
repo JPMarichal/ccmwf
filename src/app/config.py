@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     report_cache_ttl_minutes: int = 30
 
+    # Report Branch Configuration (Fase 5+)
+    ramas_autorizadas: List[int] = Field(default_factory=list)
+    rama_actual: Optional[int] = None
+
     # Security
     secret_key: str = "change-this-secret-key-in-production"
 
@@ -92,6 +96,27 @@ class Settings(BaseSettings):
         if v.lower() not in valid_envs:
             raise ValueError(f'App env must be one of: {valid_envs}')
         return v.lower()
+
+    @field_validator('ramas_autorizadas', mode='before')
+    def parse_ramas_autorizadas(cls, value: Any) -> List[int]:  # noqa: D401
+        """Normaliza la lista de ramas autorizadas desde .env"""
+        if value is None or value == "":
+            return []
+        if isinstance(value, list):
+            return [int(item) for item in value if str(item).strip()]
+        if isinstance(value, int):
+            return [value]
+        if isinstance(value, str):
+            items = [segment.strip() for segment in value.split(',')]
+            return [int(segment) for segment in items if segment]
+        raise ValueError('ramas_autorizadas debe ser una lista o cadena con enteros separados por comas')
+
+    @field_validator('rama_actual', mode='before')
+    def parse_rama_actual(cls, value: Any) -> Optional[int]:  # noqa: D401
+        """Convierte la rama actual configurada a entero"""
+        if value is None or value == "":
+            return None
+        return int(value)
 
     def model_post_init(self, __context: Any) -> None:  # noqa: D401
         """Normaliza rutas relativas para credenciales después de cargar el .env."""

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 import pytest
@@ -196,6 +196,181 @@ def test_cache_metrics_track_usage():
     assert metrics_after_second["misses"] == 1
     assert metrics_after_second["writes"] == 1
     assert metrics_after_second["expirations"] == 0
+
+
+def test_branch_summary_duplicate_rows_raise_error():
+    """Detecta duplicados en campos clave y emite `duplicate_records`."""
+    # Requisito: Controlar duplicados en pipelines (`docs/plan_fase5.md`, validaciones adicionales).
+
+    repository = StubRepository(
+        branch_summary_rows=[
+            {
+                "branch_id": 14,
+                "district": "Distrito 6",
+                "first_generation_date": None,
+                "first_ccm_arrival": None,
+                "last_ccm_departure": None,
+                "total_missionaries": 8,
+                "total_companionships": None,
+                "elders_count": None,
+                "sisters_count": None,
+            },
+            {
+                "branch_id": 14,
+                "district": "Distrito 6",
+                "first_generation_date": None,
+                "first_ccm_arrival": None,
+                "last_ccm_departure": None,
+                "total_missionaries": 9,
+                "total_companionships": None,
+                "elders_count": None,
+                "sisters_count": None,
+            },
+        ],
+        district_kpis_rows=[],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    with pytest.raises(DatasetValidationError) as exc_info:
+        service.prepare_branch_summary()
+
+    assert exc_info.value.error_code == "duplicate_records"
+
+
+def test_district_kpis_out_of_range_value_raises():
+    """Controla KPIs fuera de rango y devuelve `invalid_kpi_value`."""
+    # Requisito: Validar valores anómalos antes de distribuir KPIs (`docs/plan_fase5.md`).
+
+    repository = StubRepository(
+        branch_summary_rows=[],
+        district_kpis_rows=[
+            {
+                "branch_id": 14,
+                "district": "Distrito Centro",
+                "metric": "total_missionaries",
+                "value": 999.0,
+                "unit": "misioneros",
+                "generated_for_week": date.today(),
+                "extra": {},
+            }
+        ],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    with pytest.raises(DatasetValidationError) as exc_info:
+        service.prepare_district_kpis()
+
+    assert exc_info.value.error_code == "invalid_kpi_value"
+
+
+def test_prepare_branch_summary_invalid_branch_rejected():
+    """Impide preparar datasets con ramas no autorizadas (`invalid_branch`)."""
+    # Requisito: Limitar el procesamiento a ramas autorizadas (`.env`, `docs/plan_fase5.md`).
+
+    repository = StubRepository(
+        branch_summary_rows=[],
+        district_kpis_rows=[],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    with pytest.raises(DatasetValidationError) as exc_info:
+        service.prepare_branch_summary(branch_id=99)
+
+    assert exc_info.value.error_code == "invalid_branch"
+
+
+def test_branch_summary_missing_required_fields_error_code():
+    """Valida presencia de campos obligatorios y retorna `missing_required_fields`."""
+    # Requisito: Detectar registros incompletos previo a serialización (`docs/plan_fase5.md`).
+
+    repository = StubRepository(
+        branch_summary_rows=[
+            {
+                "branch_id": 14,
+                "district": " ",
+                "first_generation_date": None,
+                "first_ccm_arrival": None,
+                "last_ccm_departure": None,
+                "total_missionaries": 7,
+                "total_companionships": None,
+                "elders_count": None,
+                "sisters_count": None,
+            }
+        ],
+        district_kpis_rows=[],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    with pytest.raises(DatasetValidationError) as exc_info:
+        service.prepare_branch_summary()
+
+    assert exc_info.value.error_code == "missing_required_fields"
+
+
+def test_cache_stale_invalidates_and_refreshes():
+    """Renueva entradas caducas y actualiza métricas de invalidación (`stale_cache`)."""
+    # Requisito: Detectar caché obsoleta y regenerar dataset (`docs/plan_fase5.md`, códigos de error).
+
+    repository = StubRepository(
+        branch_summary_rows=[
+            {
+                "branch_id": 14,
+                "district": "Distrito Original",
+                "first_generation_date": None,
+                "first_ccm_arrival": None,
+                "last_ccm_departure": None,
+                "total_missionaries": 10,
+                "total_companionships": None,
+                "elders_count": None,
+                "sisters_count": None,
+            }
+        ],
+        district_kpis_rows=[],
+        upcoming_arrivals_rows=[],
+        upcoming_birthdays_rows=[],
+    )
+
+    service = build_service(repository)
+
+    first_result = service.prepare_branch_summary()
+    assert first_result.metadata.cache_hit is False
+
+    cache_key = service._build_cache_key("branch_summary", 14, {})
+    cached_payload = service._cache._store[cache_key]
+    cached_payload["metadata"]["generated_at"] = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+
+    repository.branch_summary_rows = [
+        {
+            "branch_id": 14,
+            "district": "Distrito Renovado",
+            "first_generation_date": None,
+            "first_ccm_arrival": None,
+            "last_ccm_departure": None,
+            "total_missionaries": 11,
+            "total_companionships": None,
+            "elders_count": None,
+            "sisters_count": None,
+        }
+    ]
+
+    refreshed_result = service.prepare_branch_summary()
+    metrics_after_refresh = service._cache.get_metrics()
+
+    assert refreshed_result.metadata.cache_hit is False
+    assert refreshed_result.data[0]["district"] == "Distrito Renovado"
+    assert metrics_after_refresh["invalidations"] >= 1
 
 
 def test_upcoming_arrivals_negative_count():
