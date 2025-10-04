@@ -17,12 +17,11 @@ Preparar datasets consolidados y consistentes desde la base de datos MySQL para 
 - **`scripts_google/EnviarReportesPDF.js`** y **`scripts_google/AutomatizacionReportes.js`**: Necesitan datasets preformateados para PDFs y programación de envíos.
 - **`scripts_google/TelegramNotifier.js`** y **`scripts_google/Correos de Cumpleanos.js`**: Consumen datos agregados (próximos ingresos, cumpleaños, estadísticas).
 
-## Arquitectura Objetivo en Python (Fase 5)
-- **Servicios**: Diseñar `ReportPreparationService` con submódulos especializados (`AggregationsService`, `CachingService`, `ValidationService`).
-- **DTOs**: Crear modelos Pydantic para `BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`, `ReportDatasetMetadata`.
-- **Capa de caché**: Soportar backend configurable (memoria/Redis). TTL y keys derivados de `branch_id` y fecha de generación.
-- **Validadores**: Reutilizar reglas de `src/app/services/validators.py` y añadir verificaciones contra estructuras esperadas de reportes.
-- **Logging**: Mensajes en español con campos obligatorios (`message_id`, `etapa="fase_5_preparacion"`, `dataset_id`, `records_processed`, `cache_hit`, `error_code`).
+- **Servicios**: ✅ `ReportPreparationService` actúa como fachada; cada pipeline hereda de `BaseDatasetPipeline` y aplica validaciones.
+- **DTOs**: ✅ Modelos Pydantic implementados (`BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`, `ReportDatasetMetadata` con `message_id`).
+- **Capa de caché**: ✅ Estrategias `InMemoryCacheStrategy` y `RedisCacheStrategy` con métricas (`hits`, `misses`, `writes`, `invalidations`) y TTL configurable.
+- **Validadores**: ✅ Reglas de consistencia aplicadas en pipelines (`invalid_total_missionaries`, `invalid_kpi_value`, `invalid_missionaries_count`, `dataset_missing_rows`).
+- **Logging**: ✅ Mensajes estructurados en español (`etapa="fase_5_preparacion"`, `dataset_id`, `branch_id`, `cache_hit`, `records_processed`, `cache_metrics`, `message_id`).
 
 ## Patrones de Diseño Prioritarios
 - **Facade**: `ReportPreparationService` actuará como fachada única para los consumidores (Telegram, email, Sheets), encapsulando la orquestación interna de agregaciones y validaciones.
@@ -39,12 +38,12 @@ Preparar datasets consolidados y consistentes desde la base de datos MySQL para 
 - Coordinación con `docs/workflow.md` y `docs/plan.md` para mantener congruencia.
 
 ## Entregables
-- ⚠️ **Servicio de preparación de datasets** (`src/app/services/report_preparation_service.py`) listo para consumo interno.
-- ⚠️ **Esquemas DTO + serializadores** en `src/app/models.py` o módulo dedicado.
-- ⚠️ **Capa de caché** con estrategia de invalidación y métricas.
-- ⚠️ **Validadores y reglas de consistencia** documentadas.
-- ⚠️ **Tests unitarios/modulares** (`tests/test_report_preparation_service.py`, `tests/test_report_validations.py`) cubriendo casos exitosos y fallos.
-- ⚠️ **Documentación** actualizada (`docs/development_guide.md`, `docs/api_documentation.md`, `docs/performance_metrics.md`, `docs/plan.md`).
+- ✅ **Servicio de preparación de datasets** (`src/app/services/report_preparation_service.py`) listo para consumo interno con cacheo parametrizable.
+- ✅ **Esquemas DTO + serializadores** en `src/app/models.py` (incluye `message_id` automático).
+- ✅ **Capa de caché** con estrategias, TTL y métricas (`hits`, `misses`, `writes`, `invalidations`).
+- ✅ **Validadores y reglas de consistencia** documentadas y aplicadas en pipelines.
+- ✅ **Tests unitarios/integración** (`tests/test_report_preparation_service.py`, `tests/integration/test_report_preparation_integration.py`) cubren rutas felices, caché y errores.
+- ℹ️ **Documentación**: se actualiza continuamente (ver secciones `docs/development_guide.md`, `docs/reportes_inventario.md`, `docs/performance_metrics.md`).
 
 ## Plan Semanal
 

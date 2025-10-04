@@ -117,6 +117,14 @@ python -m pytest src/tests/test_database_sync_service.py -vv
 
 **ℹ️ Flujo integrado**: Tras Fase 3, cuando el correo se marca como leído y los archivos se suben a Drive, se debe invocar `/extraccion_generacion` para persistir los datos en MySQL.
 
+## Fase 5 - Preparación de reportes (caché y pipelines)
+
+- **Fachada**: `ReportPreparationService` coordina los pipelines (`BranchSummaryPipeline`, `DistrictKPIPipeline`, `UpcomingArrivalPipeline`, `UpcomingBirthdayPipeline`) siguiendo Template Method. Cada pipeline valida datos (`invalid_total_missionaries`, `invalid_kpi_value`, `invalid_missionaries_count`, `dataset_missing_rows`) antes de serializar DTOs.
+- **Caché configurable**: `CacheStrategy` expone implementaciones `InMemoryCacheStrategy` y `RedisCacheStrategy`. Selecciona la estrategia mediante `.env` (`CACHE_PROVIDER`, `REDIS_URL`, `REPORT_CACHE_TTL_MINUTES`). TTL ≤ 0 desactiva el almacenamiento.
+- **Métricas y logging**: Cada estrategia registra métricas (`hits`, `misses`, `writes`, `invalidations`) y logs en español con `etapa="fase_5_preparacion"`. `ReportDatasetMetadata` incluye `message_id` único que se propaga a los logs (`pipeline_cache_hit`, `pipeline_cache_miss`, `pipeline_completed`).
+- **Consumo**: Los servicios de Fase 6-8 deben reutilizar los DTOs devueltos (`BranchSummary`, `DistrictKPI`, `UpcomingArrival`, `UpcomingBirthday`) y consultar las métricas de caché cuando se requiera auditoría.
+- **Pruebas**: `tests/test_report_preparation_service.py` valida cache hits/misses y errores de datos; `tests/integration/test_report_preparation_integration.py` ejecuta consultas SQLite simulando MySQL. Ejecutar con `pytest tests/test_report_preparation_service.py` y `pytest tests/integration/test_report_preparation_integration.py` teniendo `PYTHONPATH` apuntando a `src/`.
+
 ## Handoff: Pasos recomendados
 
 1. **Verificar cobertura**: `python -m pytest tests/ --cov=app --cov-report=term-missing`. Tomar nota del porcentaje actual (objetivo ≥80 %).
