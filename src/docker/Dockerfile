@@ -2,31 +2,34 @@
 # CCM Email Service - Dockerfile
 # ==========================================
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Configurar variables de entorno
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app/src
 
 # Crear directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    gcc \
+# Instalar dependencias del sistema requeridas por mysqlclient, healthchecks, etc.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    default-libmysqlclient-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de dependencias
-COPY requirements.txt .
+# Copiar archivos de dependencias desde la raíz del proyecto
+COPY ../../src/requirements.txt /tmp/requirements.txt
 
 # Instalar dependencias Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Crear directorio para logs
+# Crear estructura de aplicación
 RUN mkdir -p /app/logs
 
-# Copiar código fuente
-COPY . .
+# Copiar código fuente y recursos necesarios desde la raíz
+COPY ../../ /app/
 
 # Crear usuario no-root para seguridad
 RUN useradd --create-home --shell /bin/bash app \
