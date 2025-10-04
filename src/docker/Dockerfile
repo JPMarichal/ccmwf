@@ -20,8 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de dependencias desde la raíz del proyecto
-COPY ../../src/requirements.txt /tmp/requirements.txt
+# Copiar archivos de dependencias (el contexto de build debe ser la raíz del repo)
+COPY src/requirements.txt /tmp/requirements.txt
 
 # Instalar dependencias Python
 RUN pip install --upgrade pip && pip install --no-cache-dir -r /tmp/requirements.txt
@@ -29,8 +29,8 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r /tmp/requirements
 # Crear estructura de aplicación
 RUN mkdir -p /app/logs
 
-# Copiar código fuente y recursos necesarios desde la raíz
-COPY ../../ /app/
+# Copiar código fuente y recursos necesarios desde la raíz del repositorio
+COPY . /app/
 
 # Crear usuario no-root para seguridad
 RUN useradd --create-home --shell /bin/bash app \
