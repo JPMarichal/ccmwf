@@ -16,6 +16,8 @@ from app.services.report_preparation_service import (
     ReportPreparationService,
 )
 
+STALE_CACHE_AGE_HOURS = 2
+
 
 @dataclass
 class StubRepository(ReportDataRepository):
@@ -349,7 +351,9 @@ def test_cache_stale_invalidates_and_refreshes():
 
     cache_key = service._build_cache_key("branch_summary", 14, {})
     cached_payload = service._cache._store[cache_key]
-    cached_payload["metadata"]["generated_at"] = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+    cached_payload["metadata"]["generated_at"] = (
+        datetime.utcnow() - timedelta(hours=STALE_CACHE_AGE_HOURS)
+    ).isoformat()
 
     repository.branch_summary_rows = [
         {
