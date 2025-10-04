@@ -26,6 +26,10 @@ from app.services.report_data_repository import (
 
 logger = structlog.get_logger("report_preparation")
 
+MAX_TOTAL_MISSIONARIES = 500
+MAX_KPI_VALUE = 500
+MAX_MISSIONARIES_COUNT = 200
+
 
 class ReportPreparationError(Exception):
     """Error genérico de preparación de reportes."""
@@ -170,9 +174,9 @@ class BranchSummaryPipeline(BaseDatasetPipeline):
                     f"Total de misioneros negativo en registro {index} del dataset {self.dataset_id}",
                     error_code="invalid_total_missionaries",
                 )
-            if total is not None and total > 500:
+            if total is not None and total > MAX_TOTAL_MISSIONARIES:
                 raise DatasetValidationError(
-                    f"Total de misioneros fuera de rango en registro {index} del dataset {self.dataset_id}",
+                    f"Total de misioneros fuera de rango (>{MAX_TOTAL_MISSIONARIES}) en registro {index} del dataset {self.dataset_id}",
                     error_code="invalid_total_missionaries",
                 )
         return validated
@@ -205,9 +209,9 @@ class DistrictKPIPipeline(BaseDatasetPipeline):
                     f"Valor negativo en KPI '{row.get('metric')}' en registro {index}",
                     error_code="invalid_kpi_value",
                 )
-            if value is not None and value > 500:
+            if value is not None and value > MAX_KPI_VALUE:
                 raise DatasetValidationError(
-                    f"Valor fuera de rango en KPI '{row.get('metric')}' en registro {index}",
+                    f"Valor fuera de rango (>{MAX_KPI_VALUE}) en KPI '{row.get('metric')}' en registro {index}",
                     error_code="invalid_kpi_value",
                 )
         return validated
@@ -239,9 +243,9 @@ class UpcomingArrivalPipeline(BaseDatasetPipeline):
                     f"Conteo negativo de misioneros en registro {index}",
                     error_code="invalid_missionaries_count",
                 )
-            if count is not None and count > 200:
+            if count is not None and count > MAX_MISSIONARIES_COUNT:
                 raise DatasetValidationError(
-                    f"Conteo de misioneros fuera de rango en registro {index}",
+                    f"Conteo de misioneros fuera de rango (>{MAX_MISSIONARIES_COUNT}) en registro {index}",
                     error_code="invalid_missionaries_count",
                 )
         return validated

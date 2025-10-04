@@ -99,7 +99,7 @@ class Settings(BaseSettings):
 
     @field_validator('ramas_autorizadas', mode='before')
     def parse_ramas_autorizadas(cls, value: Any) -> List[int]:  # noqa: D401
-        """Normaliza la lista de ramas autorizadas desde .env"""
+        """Normalizes the authorized branches list coming from .env."""
         if value is None or value == "":
             return []
         if isinstance(value, list):
