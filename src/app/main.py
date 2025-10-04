@@ -6,10 +6,11 @@ Servicio para recepción y procesamiento de correos de misioneros
 from dataclasses import asdict
 from typing import Optional
 
+from contextlib import asynccontextmanager
+import structlog
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
-from contextlib import asynccontextmanager
 
 from pydantic import BaseModel, Field
 
@@ -20,10 +21,7 @@ from app.services.drive_service import DriveService
 from app.services.email_service import EmailService
 from app.services.report_preparation_service import ReportPreparationService
 from app.services.telegram_client import TelegramClient
-from app.services.telegram_notification_service import (
-    TelegramNotificationResult,
-    TelegramNotificationService,
-)
+from app.services.telegram_notification_service import TelegramNotificationResult, TelegramNotificationService
 
 
 email_service: Optional[EmailService] = None
@@ -31,6 +29,7 @@ drive_service: Optional[DriveService] = None
 database_sync_service: Optional[DatabaseSyncService] = None
 report_preparation_service: Optional[ReportPreparationService] = None
 telegram_notification_service: Optional[TelegramNotificationService] = None
+logger = structlog.get_logger("app_main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
