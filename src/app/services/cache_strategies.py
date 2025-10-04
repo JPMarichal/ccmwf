@@ -27,6 +27,7 @@ class CacheMetrics:
     misses: int = 0
     writes: int = 0
     invalidations: int = 0
+    expirations: int = 0
 
     def to_dict(self) -> Dict[str, int]:
         return asdict(self)
@@ -68,16 +69,16 @@ class InMemoryCacheStrategy(CacheStrategy):
     def get(self, key: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             expires_at = self._expirations.get(key)
-            if expires_at and expires_at < time.time():
+            expired = expires_at is not None and expires_at < time.time()
+            if expired:
                 self._store.pop(key, None)
                 self._expirations.pop(key, None)
-                self._metrics.misses += 1
+                self._metrics.expirations += 1
                 logger.debug(
                     "cache_expirada_memoria",
                     etapa="fase_5_preparacion",
                     clave=key,
                 )
-                return None
 
             value = self._store.get(key)
             if value is not None:
@@ -114,17 +115,20 @@ class InMemoryCacheStrategy(CacheStrategy):
     def invalidate_prefix(self, prefix: str) -> None:
         with self._lock:
             keys = [k for k in self._store if k.startswith(prefix)]
+            if not keys:
+                return
+
             for key in keys:
                 self._store.pop(key, None)
                 self._expirations.pop(key, None)
-            if keys:
-                self._metrics.invalidations += len(keys)
-                logger.debug(
-                    "cache_invalidada_prefijo_memoria",
-                    etapa="fase_5_preparacion",
-                    prefijo=prefix,
-                    total=len(keys),
-                )
+
+            self._metrics.invalidations += len(keys)
+            logger.debug(
+                "cache_invalidada_prefijo_memoria",
+                etapa="fase_5_preparacion",
+                prefijo=prefix,
+                total=len(keys),
+            )
 
     def get_metrics(self) -> Dict[str, int]:
         with self._lock:
@@ -189,6 +193,7 @@ class RedisCacheStrategy(CacheStrategy):
         keys = list(self._client.scan_iter(match=pattern))
         if not keys:
             return
+
         self._client.delete(*keys)
         with self._lock:
             self._metrics.invalidations += len(keys)

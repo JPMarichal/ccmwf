@@ -195,6 +195,7 @@ def test_cache_metrics_track_usage():
     assert metrics_after_second["hits"] == 1
     assert metrics_after_second["misses"] == 1
     assert metrics_after_second["writes"] == 1
+    assert metrics_after_second["expirations"] == 0
 
 
 def test_upcoming_arrivals_negative_count():
