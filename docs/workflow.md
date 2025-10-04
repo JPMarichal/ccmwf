@@ -96,22 +96,24 @@ Una vez procesados los datos, el sistema genera automáticamente:
 - **Observer/Event Publisher**: Cuando Fase 4 inserta nuevos datos, se emite `dataset.invalidated` para que Fases 6-8 refresquen la información antes de distribuirla (Telegram, email, Sheets).
 - **Adapters** (opcional): Se utilizan si es necesario envolver vistas MySQL o dataframes de `pandas` para mantener la interfaz estable de los DTOs.
 
-Una vez que la fachada entrega los datasets normalizados, el sistema genera automáticamente:
 
 1. **Reporte en Google Sheets**:
    - Branch in a Glance
    
 2. **Reportes por Telegram**:
-    - Notificaciones push:
-      - Distritos que llegan esta semana
-      - Próximos cumpleaños
-   
+   - **Servicio**: `TelegramNotificationService` consulta datasets preparados y envía mensajes al chat configurado (`TELEGRAM_CHAT_ID`).
+   - **Notificaciones push**:
+     - Distritos que llegan esta semana (`/telegram/proximos-ingresos`).
+     - Próximos cumpleaños (`/telegram/proximos-cumpleanos`).
+     - Alertas operativas (`/telegram/alerta`).
+   - **Resiliencia**: Reintentos con backoff exponencial limitado y logging estructurado `etapa="fase_6_telegram"` (`message_id`, `records_sent`, `error_code`).
+   - **Cobertura**: Pruebas unitarias (`src/tests/test_telegram_notification_service.py`) e integración (`tests/integration/test_telegram_endpoints.py`).
+
 3. **Reportes por Correo Electrónico**:
    - Por determinar
 
 ### Configuración deDestinatarios
 - **Frecuencia**: Automática después de cada procesamiento
-- **Formato**: Adaptable según el medio de distribución
 
 ## Consideraciones Técnicas
 

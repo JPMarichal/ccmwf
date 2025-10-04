@@ -44,20 +44,20 @@ Habilitar un servicio de notificaciones que distribuya por Telegram los reportes
 
 ## Plan de Trabajo
 - **Semana 8 – Diseño y configuración**
-  - Levantar requisitos de formateo comparando salidas actuales de Apps Script.
-  - Definir contrato del servicio Telegram y mapeo de DTOs ↔ mensajes.
-  - Documentar variables `.env` y preparar logging dedicado.
+  - ✅ Levantar requisitos de formateo comparando salidas actuales de Apps Script.
+  - ✅ Definir contrato del servicio Telegram y mapeo de DTOs ↔ mensajes.
+  - ✅ Documentar variables `.env` y preparar logging dedicado.
 - **Semana 9 – Implementación**
-  - Codificar cliente/adaptador Telegram con reintentos.
-  - Implementar formateadores y servicio aplicando Template Method/Builder.
-  - Exponer endpoints FastAPI y validar integración con caché.
+  - ✅ Codificar cliente/adaptador Telegram con reintentos y límite de backoff.
+  - ✅ Implementar formateadores y servicio aplicando Template Method/Builder.
+  - ✅ Exponer endpoints FastAPI y validar integración con caché y retries.
 - **Semana 10 – Calidad y documentación**
-  - Escribir pruebas unitarias, modulares e integración (casos exitosos y fallos).
-  - Ejecutar benchmarks básicos y registrar métricas en `docs/performance_metrics.md` (si aplica).
-  - Actualizar `docs/plan.md` y `docs/workflow.md` con nuevos pasos de distribución.
+  - ✅ Escribir pruebas unitarias, modulares e integración (casos exitosos y fallos).
+  - ℹ️ Ejecutar benchmarks básicos y registrar métricas en `docs/performance_metrics.md` (si aplica).
+  - ✅ Actualizar `docs/plan.md` y `docs/workflow.md` con nuevos pasos de distribución.
 
 ## Riesgos y Mitigaciones
-- **Rate limit o caídas de Telegram**: Implementar backoff exponencial y alertas `WARNING`/`ERROR` con sugerencias de reintento manual.
+- **Rate limit o caídas de Telegram**: ✅ Backoff exponencial con límite máximo y logs `WARNING`/`ERROR`.
 - **Datasets vacíos o inconsistentes**: Mensajes amigables («No hay próximos ingresos») y validaciones tempranas (`records_skipped`).
 - **Credenciales mal configuradas**: Validar configuración al arranque y abortar con logs `CRITICAL` indicando variable faltante.
 - **Desalineación con Apps Script**: Pruebas snapshot y revisión manual con liderazgo para asegurar equivalencia semántica.

@@ -137,18 +137,19 @@ Este documento detalla el plan de trabajo específico para cada fase del workflo
 ### Fase 6: Generación de Reportes por Telegram
 **Objetivo**: Report Service envía notificaciones push automáticas reutilizando los datasets de Fase 5
 
-**Actividades**:
+- **Actividades**:
 - ✅ **Configuración de bot**: Token y credenciales de Telegram cargadas desde `.env`
 - ✅ **Formateo de mensaje**: Formateadores HTML implementados en `TelegramNotificationService`
 - ℹ️ **Identificación de destinatarios**: Validar lista final de chats/grupos (actualmente se usa `TELEGRAM_CHAT_ID` principal)
 - ✅ **Envío de notificaciones**: Endpoints `/telegram/proximos-ingresos`, `/telegram/proximos-cumpleanos`, `/telegram/alerta` operativos
 - ⏳ **Manejo de respuestas**: Posible interacción básica pendiente
 - ✅ **Logging de envíos**: Logs estructurados `etapa="fase_6_telegram"` en servicio y cliente
+- ✅ **Reintentos resilientes**: Backoff exponencial limitado para evitar esperas excesivas en `_send_with_retries()`
 
-**Entregables**:
-- ✅ Servicio `TelegramNotificationService` con Template Method y reintentos
-- ✅ Endpoints FastAPI publicados y cubiertos con pruebas (`tests/integration/test_telegram_endpoints.py`)
-- ✅ Mensajes para próximos ingresos/cumpleaños y alertas con manejo de datasets vacíos
+- **Entregables**:
+- ✅ Servicio `TelegramNotificationService` con Template Method, docstrings y reintentos con límite de backoff
+- ✅ Endpoints FastAPI publicados y cubiertos con pruebas (`tests/integration/test_telegram_endpoints.py`, `src/tests/test_telegram_notification_service.py`)
+- ✅ Mensajes para próximos ingresos/cumpleaños y alertas con manejo de datasets vacíos y logs trazables
 - ⚠️ Log de interacciones entrantes (para respuestas) pendiente
 
 **Recursos**:
